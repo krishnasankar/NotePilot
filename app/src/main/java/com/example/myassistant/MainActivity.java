@@ -315,19 +315,14 @@ public class MainActivity extends AppCompatActivity {
             List<Note> notes = NotesStorage.loadNotes(MainActivity.this);
             if (notes == null) notes = new java.util.ArrayList<>();
 
-            Note target = null;
-            for (Note n : notes) {
-                if (n.getTitle() != null && n.getTitle().equalsIgnoreCase(title)) {
-                    target = n;
-                    break;
-                }
-            }
+            Note target = notes.stream().filter(n -> n.getTitle() != null && n.getTitle().equalsIgnoreCase(title)).findFirst().orElse(null);
 
             String oldTitle = title;
             String oldContent = (target != null && target.getContent() != null) ? target.getContent() : "";
             String newTitle = title;
             String newContent = content;
 
+            List<Note> finalNotes = notes;
             ContentChangeGuard.confirmContentChange(
                     MainActivity.this,
                     oldTitle,
@@ -343,10 +338,10 @@ public class MainActivity extends AppCompatActivity {
                             } else {
                                 int[] noteColors = getResources().getIntArray(R.array.note_colors);
                                 int randomColor = noteColors[new Random().nextInt(noteColors.length)];
-                                notes.add(new Note(newTitle, newContent, randomColor));
+                                finalNotes.add(new Note(newTitle, newContent, randomColor));
                                 created = true;
                             }
-                            NotesStorage.saveNotes(MainActivity.this, notes);
+                            NotesStorage.saveNotes(MainActivity.this, finalNotes);
 
                             String msg = created ? "Created note '" + newTitle + "'." : "Updated note '" + newTitle + "'.";
                             Object prevTag = textViewResponse.getTag();
@@ -529,7 +524,7 @@ public class MainActivity extends AppCompatActivity {
                             if (message.has("tool_calls")) {
                                 JSONArray toolCalls = message.getJSONArray("tool_calls");
                                 runOnUiThread(() -> {
-                                    String preface = "AI requested note changes. Review and approve to apply.";
+                                    String preface = "AI requested note changes.";
                                     Object prevTag = textViewResponse.getTag();
                                     String prev = prevTag instanceof String ? (String) prevTag : textViewResponse.getText().toString();
                                     String combined = (prev == null || prev.trim().isEmpty()) ? preface : (prev + "\n\n" + preface);

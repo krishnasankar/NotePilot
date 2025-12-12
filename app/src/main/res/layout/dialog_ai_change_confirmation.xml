@@ -31,7 +31,7 @@
         android:id="@+id/disclaimerText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Disclaimer: Granting access allows the AI to read and change your note content. The AI’s changes may be incorrect, incomplete, or misaligned with your intent. Review results after applying. You can stop AI access anytime by not approving changes or clearing your API key."
+        android:text="Disclaimer: Granting access allows the AI to change your note content. The AI’s changes may be incorrect, incomplete, or misaligned with your intent. Review results after applying."
         android:textColor="@color/textColorSecondary"
         android:textSize="13sp"
         android:lineSpacingExtra="4dp"
