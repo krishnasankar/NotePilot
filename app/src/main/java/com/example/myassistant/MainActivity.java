@@ -1,6 +1,8 @@
 package com.example.myassistant;import androidx.appcompat.app.AppCompatActivity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
@@ -19,7 +21,6 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Build;
-import android.os.Looper;
 import android.text.TextUtils;
 import android.content.Context;
 import android.view.inputmethod.InputMethodManager;
@@ -245,6 +246,15 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         SplashScreen.installSplashScreen(this);
         setContentView(R.layout.activity_main);
+
+        View root = findViewById(R.id.rootLayout);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
+            int statusBarHeight = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
+            int imeHeight = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+            v.setPadding(v.getPaddingLeft(), statusBarHeight, v.getPaddingRight(), imeHeight);
+            return windowInsets;
+        });
+
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         requestLocationPermissionsIfNeeded();
         buttonSettings = findViewById(R.id.buttonSettings);
@@ -256,22 +266,9 @@ public class MainActivity extends AppCompatActivity {
         buttonNotes = findViewById(R.id.buttonNotes);
         buttonCopyResponse = findViewById(R.id.buttonCopyResponse);
         responseCard = findViewById(R.id.responseCard);
-        View root = findViewById(R.id.rootLayout);
         ImageButton buttonClearInput = findViewById(R.id.buttonClearInput);
         buttonClearInput.setOnClickListener(v -> editTextPrompt.setText(""));
-        if (root != null) {
-            ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
-                int statusBarHeight = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
-                final float scale = v.getResources().getDisplayMetrics().density;
-                int extraDp = (int) (8 * scale);
-                v.setPadding(v.getPaddingLeft(),
-                        statusBarHeight + extraDp,
-                        v.getPaddingRight(),
-                        v.getPaddingBottom());
-                return windowInsets;
-            });
-            root.requestApplyInsets();
-        }
+
         buttonSend.setOnClickListener(v -> {
             hideKeyboardAndClearFocus();
             String prompt = editTextPrompt.getText().toString().trim();
@@ -298,6 +295,15 @@ public class MainActivity extends AppCompatActivity {
         });
         buttonSettings.setOnClickListener(v -> showApiKeyDialog());
         updateKeyStatus();
+
+        // Request focus and show keyboard
+        editTextPrompt.requestFocus();
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.showSoftInput(editTextPrompt, InputMethodManager.SHOW_IMPLICIT);
+            }
+        }, 200);
     }
 
     private boolean addOrUpdateNote(String title, String content) {
