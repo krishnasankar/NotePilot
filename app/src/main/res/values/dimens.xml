@@ -1,0 +1,4 @@
+<resources>
+    <!-- space to accommodate FAB so content doesn't hide under it -->
+    <dimen name="fab_safe_bottom">88dp</dimen>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="key_present_green">#4CAF50</color>
+    <color name="key_missing_red">#F44336</color>
+</resources>
