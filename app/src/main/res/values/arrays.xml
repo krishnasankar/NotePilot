@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <integer-array name="note_colors">
+        <item>@color/note_color_1</item>
+        <item>@color/note_color_2</item>
+        <item>@color/note_color_3</item>
+        <item>@color/note_color_4</item>
+        <item>@color/note_color_5</item>
+    </integer-array>
+</resources>
