@@ -6,10 +6,9 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.TextUtils;
-import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
-
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class NoteDetailActivity extends AppCompatActivity {
@@ -48,12 +47,17 @@ public class NoteDetailActivity extends AppCompatActivity {
                 }
             }
         }
-    }
 
-    @Override
-    public void onBackPressed() {
-        saveNote();
-        super.onBackPressed();
+        // Handle back press
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                saveNote();
+                // Disable the callback to avoid a loop, and trigger the default back action
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+            }
+        });
     }
 
     private void saveNote() {
