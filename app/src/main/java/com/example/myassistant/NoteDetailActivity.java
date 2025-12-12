@@ -10,6 +10,9 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import android.view.View;
 
 public class NoteDetailActivity extends AppCompatActivity {
 
@@ -22,6 +25,13 @@ public class NoteDetailActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_note_detail);
+
+        View root = findViewById(android.R.id.content);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
+            int statusBarHeight = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
+            v.setPadding(v.getPaddingLeft(), statusBarHeight, v.getPaddingRight(), v.getPaddingBottom());
+            return windowInsets;
+        });
 
         editTextNoteTitle = findViewById(R.id.editTextNoteTitle);
         editTextNoteContent = findViewById(R.id.editTextNoteContent);
