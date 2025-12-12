@@ -20,12 +20,19 @@ public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder
 
     public interface OnNoteClickListener {
         void onNoteClick(Note note, int position);
+        void onPinClick(Note note, int position);
     }
 
     public NoteAdapter(List<Note> notes, Context context, OnNoteClickListener listener) {
         this.notes = notes;
         this.context = context;
         this.listener = listener;
+        setHasStableIds(true);
+    }
+
+    @Override
+    public long getItemId(int position) {
+        return notes.get(position).hashCode();
     }
 
     @NonNull
@@ -45,6 +52,12 @@ public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder
                 : getFirstLine(note.getContent());
         holder.textViewNoteTitle.setText(displayTitle);
         holder.itemView.setBackgroundColor(note.getColor());
+
+        holder.buttonPinNote.setImageResource(note.isPinned() ? R.drawable.ic_pin_on : R.drawable.ic_pin_off);
+
+        holder.buttonPinNote.setOnClickListener(v -> {
+            listener.onPinClick(note, holder.getAdapterPosition());
+        });
 
         holder.buttonDeleteNote.setOnClickListener(v -> new AlertDialog.Builder(context)
                 .setTitle("Delete Note")
@@ -75,11 +88,13 @@ public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder
 
     static class NoteViewHolder extends RecyclerView.ViewHolder {
         TextView textViewNoteTitle;
+        ImageButton buttonPinNote;
         ImageButton buttonDeleteNote;
 
         public NoteViewHolder(@NonNull View itemView) {
             super(itemView);
             textViewNoteTitle = itemView.findViewById(R.id.textViewNoteTitle);
+            buttonPinNote = itemView.findViewById(R.id.buttonPinNote);
             buttonDeleteNote = itemView.findViewById(R.id.buttonDeleteNote);
         }
 
