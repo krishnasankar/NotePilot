@@ -1,6 +1,8 @@
 package com.example.myassistant;import androidx.appcompat.app.AppCompatActivity;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
@@ -19,7 +21,6 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Build;
-import android.os.Looper;
 import android.text.TextUtils;
 import android.content.Context;
 import android.view.inputmethod.InputMethodManager;
@@ -41,7 +42,6 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -62,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
     private Button buttonSend;
     private ProgressBar progressBar;
     private TextView textViewResponse;
-    private FloatingActionButton fabNotes;
+    private Button buttonNotes;
     private ImageButton buttonCopyResponse;
     private ImageButton buttonSettings;
     private View keyStatusDot;
@@ -85,22 +85,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showApiKeyDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
-        builder.setTitle("OpenRouter API Key");
-        final EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setHint("sk-...");
+        android.view.LayoutInflater inflater = getLayoutInflater();
+        View view = inflater.inflate(R.layout.dialog_api_key, null);
+
+        EditText input = view.findViewById(R.id.editApiKey);
+        Button btnSave = view.findViewById(R.id.btnSave);
+        Button btnClear = view.findViewById(R.id.btnClear);
+        Button btnCancel = view.findViewById(R.id.btnCancel);
+
         String existing = ApiKeyStore.getKey(this);
         if (existing != null && !existing.isEmpty()) {
-            String masked = existing.length() > 8
-                    ? "****" + existing.substring(existing.length() - 8)
-                    : "****";
+            String masked = existing.length() > 8 ? "****" + existing.substring(existing.length() - 8) : "****";
             input.setText(masked);
         }
-        int pad = (int) (16 * getResources().getDisplayMetrics().density);
-        input.setPadding(pad, pad / 2, pad, pad / 2);
-        builder.setView(input);
-        builder.setPositiveButton("Save", (dialog, which) -> {
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
+                .setView(view)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        }
+
+        btnSave.setOnClickListener(v -> {
             String value = input.getText().toString().trim();
             if (value.isEmpty()) {
                 Toast.makeText(MainActivity.this, "API key cannot be empty", Toast.LENGTH_SHORT).show();
@@ -108,6 +115,7 @@ public class MainActivity extends AppCompatActivity {
             }
             if (value.startsWith("****")) {
                 Toast.makeText(MainActivity.this, "No changes saved", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
                 return;
             }
             boolean ok = ApiKeyStore.saveKey(MainActivity.this, value);
@@ -117,8 +125,10 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(MainActivity.this, "Failed to save API key", Toast.LENGTH_SHORT).show();
             }
+            dialog.dismiss();
         });
-        builder.setNeutralButton("Clear", (dialog, which) -> {
+
+        btnClear.setOnClickListener(v -> {
             boolean ok = ApiKeyStore.clearKey(MainActivity.this);
             if (ok) {
                 Toast.makeText(MainActivity.this, "API key cleared", Toast.LENGTH_SHORT).show();
@@ -126,9 +136,11 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(MainActivity.this, "Failed to clear API key", Toast.LENGTH_SHORT).show();
             }
+            dialog.dismiss();
         });
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss());
-        android.app.AlertDialog dialog = builder.create();
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
         dialog.show();
     }
 
@@ -234,6 +246,15 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         SplashScreen.installSplashScreen(this);
         setContentView(R.layout.activity_main);
+
+        View root = findViewById(R.id.rootLayout);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
+            int statusBarHeight = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
+            int imeHeight = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+            v.setPadding(v.getPaddingLeft(), statusBarHeight, v.getPaddingRight(), imeHeight);
+            return windowInsets;
+        });
+
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         requestLocationPermissionsIfNeeded();
         buttonSettings = findViewById(R.id.buttonSettings);
@@ -242,25 +263,12 @@ public class MainActivity extends AppCompatActivity {
         buttonSend = findViewById(R.id.buttonSend);
         progressBar = findViewById(R.id.progressBar);
         textViewResponse = findViewById(R.id.textViewResponse);
-        fabNotes = findViewById(R.id.fabNotes);
+        buttonNotes = findViewById(R.id.buttonNotes);
         buttonCopyResponse = findViewById(R.id.buttonCopyResponse);
         responseCard = findViewById(R.id.responseCard);
-        View root = findViewById(R.id.rootLayout);
         ImageButton buttonClearInput = findViewById(R.id.buttonClearInput);
         buttonClearInput.setOnClickListener(v -> editTextPrompt.setText(""));
-        if (root != null) {
-            ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
-                int statusBarHeight = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
-                final float scale = v.getResources().getDisplayMetrics().density;
-                int extraDp = (int) (8 * scale);
-                v.setPadding(v.getPaddingLeft(),
-                        statusBarHeight + extraDp,
-                        v.getPaddingRight(),
-                        v.getPaddingBottom());
-                return windowInsets;
-            });
-            root.requestApplyInsets();
-        }
+
         buttonSend.setOnClickListener(v -> {
             hideKeyboardAndClearFocus();
             String prompt = editTextPrompt.getText().toString().trim();
@@ -270,7 +278,7 @@ public class MainActivity extends AppCompatActivity {
             }
             callOpenRouterWithNotes(prompt);
         });
-        fabNotes.setOnClickListener(v -> {
+        buttonNotes.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, NotesActivity.class);
             startActivity(intent);
         });
@@ -287,6 +295,15 @@ public class MainActivity extends AppCompatActivity {
         });
         buttonSettings.setOnClickListener(v -> showApiKeyDialog());
         updateKeyStatus();
+
+        // Request focus and show keyboard
+        editTextPrompt.requestFocus();
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.showSoftInput(editTextPrompt, InputMethodManager.SHOW_IMPLICIT);
+            }
+        }, 200);
     }
 
     private boolean addOrUpdateNote(String title, String content) {
@@ -308,12 +325,66 @@ public class MainActivity extends AppCompatActivity {
         return !noteExists;
     }
 
+    // Ask for user consent before AI/system modifies note content,
+    // then apply the change only if approved.
+    private void requestAiAddOrUpdateNoteWithConsent(String title, String content, String sourceTag) {
+        runOnUiThread(() -> {
+            List<Note> notes = NotesStorage.loadNotes(MainActivity.this);
+            if (notes == null) notes = new java.util.ArrayList<>();
+
+            Note target = notes.stream().filter(n -> n.getTitle() != null && n.getTitle().equalsIgnoreCase(title)).findFirst().orElse(null);
+
+            String oldTitle = title;
+            String oldContent = (target != null && target.getContent() != null) ? target.getContent() : "";
+            String newTitle = title;
+            String newContent = content;
+
+            List<Note> finalNotes = notes;
+            ContentChangeGuard.confirmContentChange(
+                    MainActivity.this,
+                    oldTitle,
+                    oldContent,
+                    newTitle,
+                    newContent,
+                    sourceTag,
+                    approved -> {
+                        if (approved) {
+                            boolean created = false;
+                            if (target != null) {
+                                target.setContent(newContent);
+                            } else {
+                                int[] noteColors = getResources().getIntArray(R.array.note_colors);
+                                int randomColor = noteColors[new Random().nextInt(noteColors.length)];
+                                finalNotes.add(new Note(newTitle, newContent, randomColor));
+                                created = true;
+                            }
+                            NotesStorage.saveNotes(MainActivity.this, finalNotes);
+
+                            String msg = created ? "Created note '" + newTitle + "'." : "Updated note '" + newTitle + "'.";
+                            Object prevTag = textViewResponse.getTag();
+                            String prev = prevTag instanceof String ? (String) prevTag : textViewResponse.getText().toString();
+                            String combined = (prev == null || prev.trim().isEmpty()) ? msg : (prev + "\n" + msg);
+                            textViewResponse.setTag(combined);
+                            renderMarkdownToTextView(combined);
+                            Toast.makeText(MainActivity.this, "Applied change: " + newTitle, Toast.LENGTH_SHORT).show();
+                        } else {
+                            String msg = "Declined change for '" + newTitle + "'.";
+                            Object prevTag = textViewResponse.getTag();
+                            String prev = prevTag instanceof String ? (String) prevTag : textViewResponse.getText().toString();
+                            String combined = (prev == null || prev.trim().isEmpty()) ? msg : (prev + "\n" + msg);
+                            textViewResponse.setTag(combined);
+                            renderMarkdownToTextView(combined);
+                        }
+                    }
+            );
+        });
+    }
 
     private void setLoading(boolean loading) {
         runOnUiThread(() -> {
             progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
             buttonSend.setEnabled(!loading);
-            fabNotes.setEnabled(!loading);
+            if (buttonNotes != null) buttonNotes.setEnabled(!loading);
             boolean hasText = textViewResponse.getText().toString().trim().length() > 0;
             buttonCopyResponse.setEnabled(!loading && hasText);
             if (loading) {
@@ -469,7 +540,14 @@ public class MainActivity extends AppCompatActivity {
                         if (message != null) {
                             if (message.has("tool_calls")) {
                                 JSONArray toolCalls = message.getJSONArray("tool_calls");
-                                StringBuilder summaryBuilder = new StringBuilder();
+                                runOnUiThread(() -> {
+                                    String preface = "AI requested note changes.";
+                                    Object prevTag = textViewResponse.getTag();
+                                    String prev = prevTag instanceof String ? (String) prevTag : textViewResponse.getText().toString();
+                                    String combined = (prev == null || prev.trim().isEmpty()) ? preface : (prev + "\n\n" + preface);
+                                    textViewResponse.setTag(combined);
+                                    renderMarkdownToTextView(combined);
+                                });
                                 for (int i = 0; i < toolCalls.length(); i++) {
                                     JSONObject toolCall = toolCalls.getJSONObject(i);
                                     if ("function".equals(toolCall.getString("type"))) {
@@ -480,17 +558,11 @@ public class MainActivity extends AppCompatActivity {
                                             String title = arguments.optString("title", null);
                                             String content = arguments.optString("content", null);
                                             if (title != null && content != null) {
-                                                boolean created = addOrUpdateNote(title, content);
-                                                summaryBuilder.append(created ? "I have created a new note titled '" : "I have updated the note titled '").append(title).append("'.\n");
+                                                requestAiAddOrUpdateNoteWithConsent(title, content, "AI Assistant");
                                             }
                                         }
                                     }
                                 }
-                                final String summary = summaryBuilder.toString();
-                                runOnUiThread(() -> {
-                                    renderMarkdownToTextView(summary);
-                                    Toast.makeText(MainActivity.this, "Notes updated by AI", Toast.LENGTH_SHORT).show();
-                                });
                             } else {
                                 String reply = message.optString("content", "").trim();
                                 if (reply.isEmpty() && message.has("reasoning")) {
