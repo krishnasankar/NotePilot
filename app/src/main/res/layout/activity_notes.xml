@@ -1,58 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_main_gradient"
-    android:padding="16dp">
+    android:background="@color/colorPrimary"
+    tools:context=".NotesActivity">
 
     <TextView
         android:id="@+id/textNotesTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="24dp"
         android:text="Your Notes"
+        android:textColor="@color/textColorPrimary"
         android:textSize="24sp"
-        android:textStyle="bold"
-        android:textColor="@android:color/white"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        android:textStyle="bold" />
 
-    <TextView
-        android:id="@+id/textNotesHint"
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerViewNotes"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/textNotesTitle"
+        android:layout_marginTop="16dp"
+        android:clipToPadding="false"
+        android:paddingBottom="80dp" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabAddNote"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Everything you write here becomes context for the assistant."
-        android:textSize="13sp"
-        android:textColor="#E0FFFFFF"
-        android:layout_marginTop="4dp"
-        app:layout_constraintTop_toBottomOf="@id/textNotesTitle"
-        app:layout_constraintStart_toStartOf="@id/textNotesTitle" />
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="24dp"
+        android:src="@drawable/ic_add_24"
+        app:backgroundTint="@color/colorAccent"
+        app:tint="@color/white" />
 
-    <LinearLayout
-        android:id="@+id/notesCard"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:orientation="vertical"
-        android:background="@drawable/bg_card"
-        android:padding="12dp"
-        app:layout_constraintTop_toBottomOf="@id/textNotesHint"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="16dp">
-
-        <EditText
-            android:id="@+id/editTextNotes"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@android:color/transparent"
-            android:textColor="@android:color/white"
-            android:textColorHint="#B3FFFFFF"
-            android:gravity="top|start"
-            android:inputType="textMultiLine"
-            android:overScrollMode="always"
-            android:scrollbars="vertical" />
-    </LinearLayout>
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+</RelativeLayout>

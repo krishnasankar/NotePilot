@@ -4,4 +4,18 @@
     <color name="white">#FFFFFFFF</color>
     <color name="key_present_green">#4CAF50</color>
     <color name="key_missing_red">#F44336</color>
+
+    <!-- Modern Dark UI Palette -->
+    <color name="colorPrimary">#1A1A2E</color>
+    <color name="colorPrimaryDark">#162447</color>
+    <color name="colorAccent">#E94560</color>
+    <color name="textColorPrimary">#FFFFFF</color>
+    <color name="textColorSecondary">#B0B0B0</color>
+    <color name="noteBackgroundColor">#1E1E3F</color>
+
+    <color name="note_color_1">#2A2A4D</color>
+    <color name="note_color_2">#3B3B6D</color>
+    <color name="note_color_3">#4C4C8D</color>
+    <color name="note_color_4">#5D5DAE</color>
+    <color name="note_color_5">#6E6EAF</color>
 </resources>
