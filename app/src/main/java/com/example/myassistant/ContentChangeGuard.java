@@ -24,35 +24,38 @@ public final class ContentChangeGuard {
             return;
         }
 
-        StringBuilder msg = new StringBuilder();
-        String src = (sourceTag == null || sourceTag.trim().isEmpty()) ? "This action" : sourceTag;
-        msg.append(src).append(" is about to modify this note.\n\n");
+        android.view.View dialogView = android.view.LayoutInflater.from(activity)
+                .inflate(R.layout.dialog_ai_change_confirmation, null, false);
 
-        boolean titleChanged = !safe(oldTitle).equals(safe(newTitle));
-        boolean bodyChanged = !safe(oldContent).equals(safe(newContent));
-
-        if (titleChanged) {
-            msg.append("Title:\n")
-               .append("• Before: ").append(clip(oldTitle)).append("\n")
-               .append("• After:  ").append(clip(newTitle)).append("\n\n");
-        }
-        if (bodyChanged) {
-            msg.append("Body:\n")
-               .append("• Before: ").append(clipMulti(oldContent)).append("\n")
-               .append("• After:  ").append(clipMulti(newContent)).append("\n\n");
+        // Set dynamic subtitle with sourceTag (default to "AI Assistant")
+        String src = (sourceTag == null || sourceTag.trim().isEmpty()) ? "AI Assistant" : sourceTag.trim();
+        android.widget.TextView subtitle = dialogView.findViewById(R.id.subtitleText);
+        if (subtitle != null) {
+            subtitle.setText("This action is initiated by: " + src);
         }
 
-        new androidx.appcompat.app.AlertDialog.Builder(activity)
-                .setTitle("Confirm content change")
-                .setMessage(msg.toString())
-                .setPositiveButton("Save changes", (d, w) -> {
-                    if (callback != null) callback.onDecision(true);
-                })
-                .setNegativeButton("Don't save", (d, w) -> {
-                    if (callback != null) callback.onDecision(false);
-                })
+        final androidx.appcompat.app.AlertDialog alert = new androidx.appcompat.app.AlertDialog.Builder(activity)
+                .setView(dialogView)
                 .setCancelable(true)
-                .show();
+                .create();
+
+        android.view.View btnCancel = dialogView.findViewById(R.id.buttonCancel);
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> {
+                if (callback != null) callback.onDecision(false);
+                alert.dismiss();
+            });
+        }
+
+        android.view.View btnAllow = dialogView.findViewById(R.id.buttonAllow);
+        if (btnAllow != null) {
+            btnAllow.setOnClickListener(v -> {
+                if (callback != null) callback.onDecision(true);
+                alert.dismiss();
+            });
+        }
+
+        alert.show();
     }
 
     private static String clip(String s) {
