@@ -41,7 +41,6 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -62,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private Button buttonSend;
     private ProgressBar progressBar;
     private TextView textViewResponse;
-    private FloatingActionButton fabNotes;
+    private Button buttonNotes;
     private ImageButton buttonCopyResponse;
     private ImageButton buttonSettings;
     private View keyStatusDot;
@@ -242,7 +241,7 @@ public class MainActivity extends AppCompatActivity {
         buttonSend = findViewById(R.id.buttonSend);
         progressBar = findViewById(R.id.progressBar);
         textViewResponse = findViewById(R.id.textViewResponse);
-        fabNotes = findViewById(R.id.fabNotes);
+        buttonNotes = findViewById(R.id.buttonNotes);
         buttonCopyResponse = findViewById(R.id.buttonCopyResponse);
         responseCard = findViewById(R.id.responseCard);
         View root = findViewById(R.id.rootLayout);
@@ -270,7 +269,7 @@ public class MainActivity extends AppCompatActivity {
             }
             callOpenRouterWithNotes(prompt);
         });
-        fabNotes.setOnClickListener(v -> {
+        buttonNotes.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, NotesActivity.class);
             startActivity(intent);
         });
@@ -367,7 +366,7 @@ public class MainActivity extends AppCompatActivity {
         runOnUiThread(() -> {
             progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
             buttonSend.setEnabled(!loading);
-            fabNotes.setEnabled(!loading);
+            if (buttonNotes != null) buttonNotes.setEnabled(!loading);
             boolean hasText = textViewResponse.getText().toString().trim().length() > 0;
             buttonCopyResponse.setEnabled(!loading && hasText);
             if (loading) {
