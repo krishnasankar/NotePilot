@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@color/colorPrimary"
+    tools:context=".NoteDetailActivity">
+
+    <EditText
+        android:id="@+id/editTextNoteTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Title"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
+        android:textStyle="bold"
+        android:textColor="@color/textColorPrimary"
+        android:textColorHint="@color/textColorSecondary"
+        android:background="@android:color/transparent"
+        android:paddingBottom="8dp"
+        android:inputType="textCapSentences"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/noteBackgroundColor"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp"/>
+
+    <EditText
+        android:id="@+id/editTextNoteContent"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@android:color/transparent"
+        android:gravity="top"
+        android:hint="Content"
+        android:inputType="textMultiLine|textCapSentences"
+        android:textColor="@color/textColorPrimary"
+        android:textColorHint="@color/textColorSecondary" />
+
+</LinearLayout>

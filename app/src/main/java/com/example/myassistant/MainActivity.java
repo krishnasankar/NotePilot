@@ -1,7 +1,4 @@
-package com.example.myassistant;
-
-import androidx.appcompat.app.AppCompatActivity;
-
+package com.example.myassistant;import androidx.appcompat.app.AppCompatActivity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
@@ -26,38 +23,29 @@ import android.os.Looper;
 import android.text.TextUtils;
 import android.content.Context;
 import android.view.inputmethod.InputMethodManager;
-import android.view.View;
 import android.text.Html;
 import android.text.Spanned;
 import android.text.method.LinkMovementMethod;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.core.content.ContextCompat;
-
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
-import com.google.android.gms.location.LocationRequest; // deprecated in older libs, the code below uses simplified getLastLocation
+import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
-
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
-
+import java.util.List;
 import java.util.concurrent.TimeUnit;
-
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
 import java.io.IOException;
-
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.MediaType;
@@ -65,11 +53,11 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-
     private EditText editTextPrompt;
     private Button buttonSend;
     private ProgressBar progressBar;
@@ -80,18 +68,15 @@ public class MainActivity extends AppCompatActivity {
     private View keyStatusDot;
     private FusedLocationProviderClient fusedLocationClient;
     private String latestLocationText = "";
-
     private View responseCard;
     private OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)   // time to establish TCP connection
-            .writeTimeout(20, TimeUnit.SECONDS)     // time to send request body
-            .readTimeout(60, TimeUnit.SECONDS)      // time waiting for server to send response
-            .callTimeout(90, TimeUnit.SECONDS)      // overall time for the call
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(90, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build();
-
     public static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-
     private Animation loadingAnimation;
 
     private String getApiKey() {
@@ -99,42 +84,32 @@ public class MainActivity extends AppCompatActivity {
         return (k == null) ? "" : k;
     }
 
-
     private void showApiKeyDialog() {
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
         builder.setTitle("OpenRouter API Key");
-
         final EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setHint("sk-...");
         String existing = ApiKeyStore.getKey(this);
         if (existing != null && !existing.isEmpty()) {
-            // show masked except last 4 characters
             String masked = existing.length() > 8
                     ? "****" + existing.substring(existing.length() - 8)
                     : "****";
             input.setText(masked);
         }
-
-        // Put some padding in the dialog
         int pad = (int) (16 * getResources().getDisplayMetrics().density);
-        input.setPadding(pad, pad/2, pad, pad/2);
-
+        input.setPadding(pad, pad / 2, pad, pad / 2);
         builder.setView(input);
-
         builder.setPositiveButton("Save", (dialog, which) -> {
             String value = input.getText().toString().trim();
             if (value.isEmpty()) {
                 Toast.makeText(MainActivity.this, "API key cannot be empty", Toast.LENGTH_SHORT).show();
                 return;
             }
-
-            // If user pasted masked form (starts with ****), assume they didn't change real key
             if (value.startsWith("****")) {
                 Toast.makeText(MainActivity.this, "No changes saved", Toast.LENGTH_SHORT).show();
                 return;
             }
-
             boolean ok = ApiKeyStore.saveKey(MainActivity.this, value);
             if (ok) {
                 Toast.makeText(MainActivity.this, "API key saved", Toast.LENGTH_SHORT).show();
@@ -143,7 +118,6 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(MainActivity.this, "Failed to save API key", Toast.LENGTH_SHORT).show();
             }
         });
-
         builder.setNeutralButton("Clear", (dialog, which) -> {
             boolean ok = ApiKeyStore.clearKey(MainActivity.this);
             if (ok) {
@@ -153,9 +127,7 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(MainActivity.this, "Failed to clear API key", Toast.LENGTH_SHORT).show();
             }
         });
-
         builder.setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss());
-
         android.app.AlertDialog dialog = builder.create();
         dialog.show();
     }
@@ -167,40 +139,31 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateKeyStatus() {
-        // If views are not yet initialized, do nothing (prevents NPE)
         if (buttonSettings == null || keyStatusDot == null || textViewResponse == null || buttonCopyResponse == null) {
             return;
         }
-
         String apiKey = ApiKeyStore.getKey(this);
         boolean hasKey = apiKey != null && !apiKey.trim().isEmpty();
-
-        // Dim or brighten the settings icon
         buttonSettings.setAlpha(hasKey ? 1.0f : 0.6f);
-
-        // Show the dot and tint it green if key exists, red otherwise
         keyStatusDot.setVisibility(View.VISIBLE);
         int color = hasKey
                 ? ContextCompat.getColor(this, R.color.key_present_green)
                 : ContextCompat.getColor(this, R.color.key_missing_red);
         keyStatusDot.setBackgroundTintList(ColorStateList.valueOf(color));
-
-        // Enable/disable copy button based on presence of text and not loading
         boolean hasText = textViewResponse.getText().toString().trim().length() > 0;
-        boolean isLoading = false; // if you track a loading flag, use it here; otherwise rely on view states
+        boolean isLoading = false;
         buttonCopyResponse.setEnabled(!isLoading && hasText);
         buttonCopyResponse.setVisibility(hasText ? View.VISIBLE : View.GONE);
     }
 
-    // Activity Result API launcher to request location permission(s)
     private final ActivityResultLauncher<String[]> locationPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                Boolean fineGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
-                Boolean coarseGranted = result.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false);
-                if (Boolean.TRUE.equals(fineGranted) || Boolean.TRUE.equals(coarseGranted)) {
-                    fetchLastLocationOnce(); // permission granted -> fetch location
+                Boolean fineGranted = result.get(Manifest.permission.ACCESS_FINE_LOCATION);
+                Boolean coarseGranted = result.get(Manifest.permission.ACCESS_COARSE_LOCATION);
+
+                if ((fineGranted != null && fineGranted) || (coarseGranted != null && coarseGranted)) {
+                    fetchLastLocationOnce();
                 } else {
-                    // permission denied — keep latestLocationText empty
                     latestLocationText = "";
                 }
             });
@@ -209,10 +172,8 @@ public class MainActivity extends AppCompatActivity {
         boolean fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         if (!fine && !coarse) {
-            // ask for both (user will see a single prompt)
-            locationPermissionLauncher.launch(new String[]{ Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION });
+            locationPermissionLauncher.launch(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION});
         } else {
-            // we already have at least coarse/fine
             fetchLastLocationOnce();
         }
     }
@@ -224,8 +185,6 @@ public class MainActivity extends AppCompatActivity {
                         if (location != null) {
                             latestLocationText = formatLocationHumanReadable(location);
                         } else {
-                            // If cached last location is null, you may attempt a single fresh request,
-                            // but to keep it simple we'll leave it empty or optionally request updates.
                             latestLocationText = "";
                         }
                     })
@@ -233,28 +192,22 @@ public class MainActivity extends AppCompatActivity {
                         latestLocationText = "";
                     });
         } catch (SecurityException e) {
-            // not allowed
             latestLocationText = "";
         }
     }
 
-    // Helper to format lat/lon + approximate accuracy
     private String formatLocationHumanReadable(Location location) {
         if (location == null) return "";
         double lat = location.getLatitude();
         double lon = location.getLongitude();
         float accuracy = location.getAccuracy();
-        long ts = location.getTime(); // epoch millis of fix, if available
-
-        // Format time of fix
+        long ts = location.getTime();
         String fixTime = "";
         if (ts > 0) {
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
             sdf.setTimeZone(TimeZone.getDefault());
             fixTime = sdf.format(new Date(ts));
         }
-
-        // Build a short human-readable string (you can extend to reverse geocoding if you want)
         String loc = String.format(Locale.getDefault(),
                 "lat=%.6f, lon=%.6f, acc=±%.0fm", lat, lon, (double) accuracy);
         if (!TextUtils.isEmpty(fixTime)) {
@@ -262,27 +215,23 @@ public class MainActivity extends AppCompatActivity {
         }
         return loc;
     }
+
     private String getLocalDateTimeAndZone() {
         Date now = new Date();
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
         sdf.setTimeZone(TimeZone.getDefault());
         String localTime = sdf.format(now);
-
-        String tz = TimeZone.getDefault().getID(); // e.g., "Asia/Kolkata"
+        String tz = TimeZone.getDefault().getID();
         String tzDisplay = TimeZone.getDefault().getDisplayName(false, TimeZone.SHORT, Locale.getDefault());
-
-        String locale = Locale.getDefault().toLanguageTag(); // e.g., "en-IN"
-
+        String locale = Locale.getDefault().toLanguageTag();
         return String.format(Locale.getDefault(),
                 "local_time=%s, timezone=%s (%s), locale=%s",
                 localTime, tz, tzDisplay, locale);
     }
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // install the splash screen and optionally keep it until we are ready
         SplashScreen.installSplashScreen(this);
         setContentView(R.layout.activity_main);
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
@@ -299,86 +248,74 @@ public class MainActivity extends AppCompatActivity {
         View root = findViewById(R.id.rootLayout);
         ImageButton buttonClearInput = findViewById(R.id.buttonClearInput);
         buttonClearInput.setOnClickListener(v -> editTextPrompt.setText(""));
-
         if (root != null) {
             ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
-                // get status bar inset (top)
                 int statusBarHeight = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
-
-                // Add the status bar height plus a little extra spacing (e.g., 8 or 12 dp)
                 final float scale = v.getResources().getDisplayMetrics().density;
-                int extraDp = (int) (8 * scale); // 8dp of extra breathing room
+                int extraDp = (int) (8 * scale);
                 v.setPadding(v.getPaddingLeft(),
                         statusBarHeight + extraDp,
                         v.getPaddingRight(),
                         v.getPaddingBottom());
-
-                // return the unconsumed insets
                 return windowInsets;
             });
-
-            // request insets to be applied immediately
             root.requestApplyInsets();
         }
         buttonSend.setOnClickListener(v -> {
-            // Hide keyboard immediately when Ask is tapped
             hideKeyboardAndClearFocus();
-
             String prompt = editTextPrompt.getText().toString().trim();
             if (prompt.isEmpty()) {
                 Toast.makeText(MainActivity.this, "Enter a question", Toast.LENGTH_SHORT).show();
                 return;
             }
-
             callOpenRouterWithNotes(prompt);
         });
-
-
-        // Open notes editor
         fabNotes.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, NotesActivity.class);
             startActivity(intent);
         });
-
-        // Clear response
         buttonCopyResponse.setOnClickListener(v -> {
             String text = textViewResponse.getText().toString().trim();
             if (!text.isEmpty()) {
                 android.content.ClipboardManager clipboard =
                         (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-
                 android.content.ClipData clip =
                         android.content.ClipData.newPlainText("response", text);
-
                 clipboard.setPrimaryClip(clip);
                 Toast.makeText(MainActivity.this, "Copied to clipboard", Toast.LENGTH_SHORT).show();
             }
         });
-
         buttonSettings.setOnClickListener(v -> showApiKeyDialog());
         updateKeyStatus();
-
-        // Optional: initially disable Ask if you want until user types something
-        // buttonSend.setEnabled(false);
-        // editTextPrompt.addTextChangedListener(new SimpleTextWatcher(() -> {
-        //     buttonSend.setEnabled(editTextPrompt.getText().toString().trim().length() > 0);
-        // }));
     }
+
+    private boolean addOrUpdateNote(String title, String content) {
+        List<Note> notes = NotesStorage.loadNotes(this);
+        boolean noteExists = false;
+        for (Note note : notes) {
+            if (note.getTitle().equalsIgnoreCase(title)) {
+                note.setContent(content);
+                noteExists = true;
+                break;
+            }
+        }
+        if (!noteExists) {
+            int[] noteColors = getResources().getIntArray(R.array.note_colors);
+            int randomColor = noteColors[new Random().nextInt(noteColors.length)];
+            notes.add(new Note(title, content, randomColor));
+        }
+        NotesStorage.saveNotes(this, notes);
+        return !noteExists;
+    }
+
 
     private void setLoading(boolean loading) {
         runOnUiThread(() -> {
-
             progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
-
             buttonSend.setEnabled(!loading);
             fabNotes.setEnabled(!loading);
-
-// Only enable copy button if there's text AND we're not loading
             boolean hasText = textViewResponse.getText().toString().trim().length() > 0;
             buttonCopyResponse.setEnabled(!loading && hasText);
-
-
-
             if (loading) {
                 startResponseCardAnimation();
             } else {
@@ -389,14 +326,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void startResponseCardAnimation() {
         if (responseCard == null) return;
-
         if (loadingAnimation == null) {
             loadingAnimation = new AlphaAnimation(0.3f, 1.0f);
-            loadingAnimation.setDuration(800);           // 0.8s fade
+            loadingAnimation.setDuration(800);
             loadingAnimation.setRepeatMode(Animation.REVERSE);
             loadingAnimation.setRepeatCount(Animation.INFINITE);
         }
-
         responseCard.startAnimation(loadingAnimation);
     }
 
@@ -415,34 +350,58 @@ public class MainActivity extends AppCompatActivity {
             });
             return;
         }
-
-
         setLoading(true);
-
         String dateTimeInfo = getLocalDateTimeAndZone();
-        String locationInfo = latestLocationText; // may be empty if no permission or no fix
-
+        String locationInfo = latestLocationText;
         String contextSnippet = "Device context: " + dateTimeInfo;
         if (locationInfo != null && !locationInfo.isEmpty()) {
             contextSnippet += "\nLocation (approx): " + locationInfo;
         }
-
-        // Load notes from file each time (so changes are always picked up)
-        String notes = NotesStorage.loadNotes(this);
-        if (notes == null) notes = "";
-        int maxNotesChars = 4000; // avoid overly huge prompts
+        List<Note> notesList = NotesStorage.loadNotes(this);
+        StringBuilder notesContent = new StringBuilder();
+        if (notesList != null && !notesList.isEmpty()) {
+            for (Note note : notesList) {
+                boolean hasTitle = note.getTitle() != null && !note.getTitle().trim().isEmpty();
+                boolean hasContent = note.getContent() != null && !note.getContent().trim().isEmpty();
+                if (hasTitle || hasContent) {
+                    notesContent.append("--- Start of Note ---\n");
+                    if (hasTitle) {
+                        notesContent.append("Title: ").append(note.getTitle()).append("\n");
+                    }
+                    if (hasContent) {
+                        notesContent.append("Content:\n").append(note.getContent()).append("\n");
+                    }
+                    notesContent.append("--- End of Note ---\n\n");
+                }
+            }
+        }
+        String notes = notesContent.toString();
+        int maxNotesChars = 4000;
         if (notes.length() > maxNotesChars) {
             notes = notes.substring(notes.length() - maxNotesChars);
         }
-
         JSONObject jsonBody = new JSONObject();
         try {
             jsonBody.put("model", "arcee-ai/trinity-mini:free");
             jsonBody.put("temperature", 1.0);
             jsonBody.put("max_tokens", 4096);
-
+            JSONArray tools = new JSONArray();
+            JSONObject noteTool = new JSONObject();
+            noteTool.put("type", "function");
+            JSONObject function = new JSONObject();
+            function.put("name", "addOrUpdateNote");
+            function.put("description", "Add or update a note");
+            JSONObject parameters = new JSONObject();
+            parameters.put("type", "object");
+            JSONObject properties = new JSONObject();
+            properties.put("title", new JSONObject().put("type", "string").put("description", "The title of the note"));
+            properties.put("content", new JSONObject().put("type", "string").put("description", "The content of the note"));
+            parameters.put("properties", properties);
+            function.put("parameters", parameters);
+            noteTool.put("function", function);
+            tools.put(noteTool);
+            jsonBody.put("tools", tools);
             JSONArray messagesArray = new JSONArray();
-
             if (!notes.isEmpty()) {
                 JSONObject systemMsg = new JSONObject();
                 systemMsg.put("role", "system");
@@ -451,23 +410,18 @@ public class MainActivity extends AppCompatActivity {
                                 "Use them as context where relevant:\n\n" + notes + "\n\n" + contextSnippet);
                 messagesArray.put(systemMsg);
             }
-
             JSONObject userMessage = new JSONObject();
             userMessage.put("role", "user");
             userMessage.put("content", prompt);
             messagesArray.put(userMessage);
-
             jsonBody.put("messages", messagesArray);
-
         } catch (JSONException e) {
             setLoading(false);
             e.printStackTrace();
             Toast.makeText(this, "JSON build failed", Toast.LENGTH_SHORT).show();
             return;
         }
-
         RequestBody body = RequestBody.create(jsonBody.toString(), JSON);
-
         Request request = new Request.Builder()
                 .url(OPENROUTER_URL)
                 .header("Authorization", "Bearer " + apiKey)
@@ -476,7 +430,6 @@ public class MainActivity extends AppCompatActivity {
                 .header("X-Title", "Notes Agent Android")
                 .post(body)
                 .build();
-
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -486,37 +439,27 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     msg = "Request failed:\n" + e.getMessage();
                 }
-
-                // Update UI and then stop loading (animation stays until text is visible)
                 runOnUiThread(() -> {
-//                    textViewResponse.setText(msg);
                     textViewResponse.setTag(msg);
                     renderMarkdownToTextView(msg);
-
                     buttonCopyResponse.setVisibility(
                             msg.trim().isEmpty() ? View.GONE : View.VISIBLE
                     );
-
                     setLoading(false);
                 });
-
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 String responseBody = response.body() != null ? response.body().string() : "";
-
                 if (!response.isSuccessful()) {
                     final String err = "❌ Error:\n" + responseBody;
                     runOnUiThread(() -> {
                         textViewResponse.setText(err);
-                        setLoading(false); // stop animation after updating UI
+                        setLoading(false);
                     });
                     return;
                 }
-
-                // Parse response on background thread
-                String reply = "";
                 try {
                     JSONObject json = new JSONObject(responseBody);
                     JSONArray choices = json.optJSONArray("choices");
@@ -524,84 +467,86 @@ public class MainActivity extends AppCompatActivity {
                         JSONObject choice = choices.getJSONObject(0);
                         JSONObject message = choice.optJSONObject("message");
                         if (message != null) {
-                            reply = message.optString("content", "").trim();
-                            if (reply.isEmpty() && message.has("reasoning")) {
-                                reply = message.optString("reasoning", "").trim();
-                            }
-                            if (reply.isEmpty() && choice.has("reasoning")) {
-                                reply = choice.optString("reasoning", "").trim();
+                            if (message.has("tool_calls")) {
+                                JSONArray toolCalls = message.getJSONArray("tool_calls");
+                                StringBuilder summaryBuilder = new StringBuilder();
+                                for (int i = 0; i < toolCalls.length(); i++) {
+                                    JSONObject toolCall = toolCalls.getJSONObject(i);
+                                    if ("function".equals(toolCall.getString("type"))) {
+                                        JSONObject functionCall = toolCall.getJSONObject("function");
+                                        String functionName = functionCall.getString("name");
+                                        if ("addOrUpdateNote".equals(functionName)) {
+                                            JSONObject arguments = new JSONObject(functionCall.getString("arguments"));
+                                            String title = arguments.optString("title", null);
+                                            String content = arguments.optString("content", null);
+                                            if (title != null && content != null) {
+                                                boolean created = addOrUpdateNote(title, content);
+                                                summaryBuilder.append(created ? "I have created a new note titled '" : "I have updated the note titled '").append(title).append("'.\n");
+                                            }
+                                        }
+                                    }
+                                }
+                                final String summary = summaryBuilder.toString();
+                                runOnUiThread(() -> {
+                                    renderMarkdownToTextView(summary);
+                                    Toast.makeText(MainActivity.this, "Notes updated by AI", Toast.LENGTH_SHORT).show();
+                                });
+                            } else {
+                                String reply = message.optString("content", "").trim();
+                                if (reply.isEmpty() && message.has("reasoning")) {
+                                    reply = message.optString("reasoning", "").trim();
+                                }
+                                if (reply.isEmpty() && choice.has("reasoning")) {
+                                    reply = choice.optString("reasoning", "").trim();
+                                }
+                                if (reply.isEmpty()) {
+                                    reply = "[Model returned empty content.]";
+                                }
+                                final String finalReply = reply;
+                                runOnUiThread(() -> {
+                                    textViewResponse.setTag(finalReply);
+                                    renderMarkdownToTextView(finalReply);
+                                    if (finalReply.trim().isEmpty()) {
+                                        buttonCopyResponse.setVisibility(View.GONE);
+                                    } else {
+                                        buttonCopyResponse.setVisibility(View.VISIBLE);
+                                    }
+                                });
                             }
                         }
                     }
-
-                    if (reply.isEmpty()) {
-                        reply = "[Model returned empty content.]";
-                    }
                 } catch (JSONException e) {
-                    reply = "Response parse failed:\n" + responseBody;
+                    final String errorReply = "Response parse failed:\n" + responseBody;
+                    runOnUiThread(() -> {
+                        textViewResponse.setText(errorReply);
+                    });
+                } finally {
+                    runOnUiThread(() -> {
+                        setLoading(false);
+                    });
                 }
-
-                final String finalReply = reply;
-
-                // Update UI and then stop loading, guaranteeing animation stays until text is placed
-                runOnUiThread(() -> {
-//                    textViewResponse.setText(finalReply);
-                    textViewResponse.setTag(finalReply);
-                    renderMarkdownToTextView(finalReply);
-
-
-                    // Show copy button only if there's actual text
-                    if (finalReply.trim().isEmpty()) {
-                        buttonCopyResponse.setVisibility(View.GONE);
-                    } else {
-                        buttonCopyResponse.setVisibility(View.VISIBLE);
-                    }
-
-                    setLoading(false);
-                });
-
             }
         });
-
     }
 
-    // Call this to hide the soft keyboard and clear focus from the current input
     private void hideKeyboardAndClearFocus() {
         View view = this.getCurrentFocus();
         if (view == null) {
-            // create a dummy view to get a window token if nothing has focus
             view = new View(this);
         }
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         if (imm != null) {
             imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
         }
-        // Also clear focus from the prompt so keyboard won't re-open
         if (editTextPrompt != null) {
             editTextPrompt.clearFocus();
         }
     }
 
-    /**
-     * Convert a small subset of Markdown to HTML:
-     * - Headings (# .. ######)
-     * - Bold **text**
-     * - Italic *text*
-     * - Unordered lists: lines starting with "-" or "*"
-     * - Simple links [text](url)
-     *
-     * NOTE: Lightweight and dependency-free.
-     */
     private String markdownToHtmlString(String md) {
         if (md == null) return "";
-
-        // Normalize line endings
         String s = md.replace("\r\n", "\n").replace("\r", "\n");
-
-        // Escape basic HTML chars
         s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-
-        // Links [text](url)
         Pattern linkPattern = Pattern.compile("\\[([^\\]]+)\\]\\(([^)]+)\\)");
         Matcher mlink = linkPattern.matcher(s);
         StringBuffer sbLinks = new StringBuffer();
@@ -613,14 +558,10 @@ public class MainActivity extends AppCompatActivity {
         }
         mlink.appendTail(sbLinks);
         s = sbLinks.toString();
-
-        // Headings (###### ... #)
         for (int i = 6; i >= 1; i--) {
             String hashes = new String(new char[i]).replace("\0", "#");
             s = s.replaceAll("(?m)^" + Pattern.quote(hashes) + "\\s*(.+)$", "<h" + i + ">$1</h" + i + ">");
         }
-
-        // Unordered lists: wrap consecutive "- " or "* " lines into <ul>
         String[] lines = s.split("\n");
         StringBuilder out = new StringBuilder();
         boolean inList = false;
@@ -647,13 +588,9 @@ public class MainActivity extends AppCompatActivity {
         }
         if (inList) out.append("</ul>");
         s = out.toString();
-
-        // Bold **text** and italic *text*
         s = s.replaceAll("\\*\\*(.+?)\\*\\*", "<b>$1</b>");
         s = s.replaceAll("(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)", "<i>$1</i>");
-
-        // Paragraph blocks: split on 2+ newlines
-        String[] paras = s.split("\\n{2,}");
+        String[] paras = s.split("\n{2,}");
         StringBuilder html = new StringBuilder();
         for (String p : paras) {
             String trimmed = p.trim();
@@ -663,7 +600,6 @@ public class MainActivity extends AppCompatActivity {
                 html.append("<p>").append(trimmed).append("</p>\n\n");
             }
         }
-
         return html.toString().trim();
     }
 
@@ -679,5 +615,4 @@ public class MainActivity extends AppCompatActivity {
         textViewResponse.setMovementMethod(LinkMovementMethod.getInstance());
         textViewResponse.setLineSpacing(6f, 1.05f);
     }
-
 }
