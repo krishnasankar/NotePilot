@@ -308,6 +308,65 @@ public class MainActivity extends AppCompatActivity {
         return !noteExists;
     }
 
+    // Ask for user consent before AI/system modifies note content,
+    // then apply the change only if approved.
+    private void requestAiAddOrUpdateNoteWithConsent(String title, String content, String sourceTag) {
+        runOnUiThread(() -> {
+            List<Note> notes = NotesStorage.loadNotes(MainActivity.this);
+            if (notes == null) notes = new java.util.ArrayList<>();
+
+            Note target = null;
+            for (Note n : notes) {
+                if (n.getTitle() != null && n.getTitle().equalsIgnoreCase(title)) {
+                    target = n;
+                    break;
+                }
+            }
+
+            String oldTitle = title;
+            String oldContent = (target != null && target.getContent() != null) ? target.getContent() : "";
+            String newTitle = title;
+            String newContent = content;
+
+            ContentChangeGuard.confirmContentChange(
+                    MainActivity.this,
+                    oldTitle,
+                    oldContent,
+                    newTitle,
+                    newContent,
+                    sourceTag,
+                    approved -> {
+                        if (approved) {
+                            boolean created = false;
+                            if (target != null) {
+                                target.setContent(newContent);
+                            } else {
+                                int[] noteColors = getResources().getIntArray(R.array.note_colors);
+                                int randomColor = noteColors[new Random().nextInt(noteColors.length)];
+                                notes.add(new Note(newTitle, newContent, randomColor));
+                                created = true;
+                            }
+                            NotesStorage.saveNotes(MainActivity.this, notes);
+
+                            String msg = created ? "Created note '" + newTitle + "'." : "Updated note '" + newTitle + "'.";
+                            Object prevTag = textViewResponse.getTag();
+                            String prev = prevTag instanceof String ? (String) prevTag : textViewResponse.getText().toString();
+                            String combined = (prev == null || prev.trim().isEmpty()) ? msg : (prev + "\n" + msg);
+                            textViewResponse.setTag(combined);
+                            renderMarkdownToTextView(combined);
+                            Toast.makeText(MainActivity.this, "Applied change: " + newTitle, Toast.LENGTH_SHORT).show();
+                        } else {
+                            String msg = "Declined change for '" + newTitle + "'.";
+                            Object prevTag = textViewResponse.getTag();
+                            String prev = prevTag instanceof String ? (String) prevTag : textViewResponse.getText().toString();
+                            String combined = (prev == null || prev.trim().isEmpty()) ? msg : (prev + "\n" + msg);
+                            textViewResponse.setTag(combined);
+                            renderMarkdownToTextView(combined);
+                        }
+                    }
+            );
+        });
+    }
 
     private void setLoading(boolean loading) {
         runOnUiThread(() -> {
@@ -469,7 +528,14 @@ public class MainActivity extends AppCompatActivity {
                         if (message != null) {
                             if (message.has("tool_calls")) {
                                 JSONArray toolCalls = message.getJSONArray("tool_calls");
-                                StringBuilder summaryBuilder = new StringBuilder();
+                                runOnUiThread(() -> {
+                                    String preface = "AI requested note changes. Review and approve to apply.";
+                                    Object prevTag = textViewResponse.getTag();
+                                    String prev = prevTag instanceof String ? (String) prevTag : textViewResponse.getText().toString();
+                                    String combined = (prev == null || prev.trim().isEmpty()) ? preface : (prev + "\n\n" + preface);
+                                    textViewResponse.setTag(combined);
+                                    renderMarkdownToTextView(combined);
+                                });
                                 for (int i = 0; i < toolCalls.length(); i++) {
                                     JSONObject toolCall = toolCalls.getJSONObject(i);
                                     if ("function".equals(toolCall.getString("type"))) {
@@ -480,17 +546,11 @@ public class MainActivity extends AppCompatActivity {
                                             String title = arguments.optString("title", null);
                                             String content = arguments.optString("content", null);
                                             if (title != null && content != null) {
-                                                boolean created = addOrUpdateNote(title, content);
-                                                summaryBuilder.append(created ? "I have created a new note titled '" : "I have updated the note titled '").append(title).append("'.\n");
+                                                requestAiAddOrUpdateNoteWithConsent(title, content, "AI Assistant");
                                             }
                                         }
                                     }
                                 }
-                                final String summary = summaryBuilder.toString();
-                                runOnUiThread(() -> {
-                                    renderMarkdownToTextView(summary);
-                                    Toast.makeText(MainActivity.this, "Notes updated by AI", Toast.LENGTH_SHORT).show();
-                                });
                             } else {
                                 String reply = message.optString("content", "").trim();
                                 if (reply.isEmpty() && message.has("reasoning")) {
