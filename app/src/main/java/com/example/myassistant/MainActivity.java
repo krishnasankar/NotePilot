@@ -53,6 +53,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -288,7 +289,7 @@ public class MainActivity extends AppCompatActivity {
         updateKeyStatus();
     }
 
-    private void addOrUpdateNote(String title, String content) {
+    private boolean addOrUpdateNote(String title, String content) {
         List<Note> notes = NotesStorage.loadNotes(this);
         boolean noteExists = false;
         for (Note note : notes) {
@@ -300,10 +301,11 @@ public class MainActivity extends AppCompatActivity {
         }
         if (!noteExists) {
             int[] noteColors = getResources().getIntArray(R.array.note_colors);
-            int randomColor = noteColors[new java.util.Random().nextInt(noteColors.length)];
+            int randomColor = noteColors[new Random().nextInt(noteColors.length)];
             notes.add(new Note(title, content, randomColor));
         }
         NotesStorage.saveNotes(this, notes);
+        return !noteExists;
     }
 
 
@@ -467,6 +469,7 @@ public class MainActivity extends AppCompatActivity {
                         if (message != null) {
                             if (message.has("tool_calls")) {
                                 JSONArray toolCalls = message.getJSONArray("tool_calls");
+                                StringBuilder summaryBuilder = new StringBuilder();
                                 for (int i = 0; i < toolCalls.length(); i++) {
                                     JSONObject toolCall = toolCalls.getJSONObject(i);
                                     if ("function".equals(toolCall.getString("type"))) {
@@ -477,14 +480,17 @@ public class MainActivity extends AppCompatActivity {
                                             String title = arguments.optString("title", null);
                                             String content = arguments.optString("content", null);
                                             if (title != null && content != null) {
-                                                runOnUiThread(() -> {
-                                                    addOrUpdateNote(title, content);
-                                                    Toast.makeText(MainActivity.this, "Note updated by AI", Toast.LENGTH_SHORT).show();
-                                                });
+                                                boolean created = addOrUpdateNote(title, content);
+                                                summaryBuilder.append(created ? "I have created a new note titled '" : "I have updated the note titled '").append(title).append("'.\n");
                                             }
                                         }
                                     }
                                 }
+                                final String summary = summaryBuilder.toString();
+                                runOnUiThread(() -> {
+                                    renderMarkdownToTextView(summary);
+                                    Toast.makeText(MainActivity.this, "Notes updated by AI", Toast.LENGTH_SHORT).show();
+                                });
                             } else {
                                 String reply = message.optString("content", "").trim();
                                 if (reply.isEmpty() && message.has("reasoning")) {
