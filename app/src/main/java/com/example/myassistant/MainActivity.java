@@ -84,22 +84,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showApiKeyDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
-        builder.setTitle("OpenRouter API Key");
-        final EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setHint("sk-...");
+        android.view.LayoutInflater inflater = getLayoutInflater();
+        View view = inflater.inflate(R.layout.dialog_api_key, null);
+
+        EditText input = view.findViewById(R.id.editApiKey);
+        Button btnSave = view.findViewById(R.id.btnSave);
+        Button btnClear = view.findViewById(R.id.btnClear);
+        Button btnCancel = view.findViewById(R.id.btnCancel);
+
         String existing = ApiKeyStore.getKey(this);
         if (existing != null && !existing.isEmpty()) {
-            String masked = existing.length() > 8
-                    ? "****" + existing.substring(existing.length() - 8)
-                    : "****";
+            String masked = existing.length() > 8 ? "****" + existing.substring(existing.length() - 8) : "****";
             input.setText(masked);
         }
-        int pad = (int) (16 * getResources().getDisplayMetrics().density);
-        input.setPadding(pad, pad / 2, pad, pad / 2);
-        builder.setView(input);
-        builder.setPositiveButton("Save", (dialog, which) -> {
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
+                .setView(view)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        }
+
+        btnSave.setOnClickListener(v -> {
             String value = input.getText().toString().trim();
             if (value.isEmpty()) {
                 Toast.makeText(MainActivity.this, "API key cannot be empty", Toast.LENGTH_SHORT).show();
@@ -107,6 +114,7 @@ public class MainActivity extends AppCompatActivity {
             }
             if (value.startsWith("****")) {
                 Toast.makeText(MainActivity.this, "No changes saved", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
                 return;
             }
             boolean ok = ApiKeyStore.saveKey(MainActivity.this, value);
@@ -116,8 +124,10 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(MainActivity.this, "Failed to save API key", Toast.LENGTH_SHORT).show();
             }
+            dialog.dismiss();
         });
-        builder.setNeutralButton("Clear", (dialog, which) -> {
+
+        btnClear.setOnClickListener(v -> {
             boolean ok = ApiKeyStore.clearKey(MainActivity.this);
             if (ok) {
                 Toast.makeText(MainActivity.this, "API key cleared", Toast.LENGTH_SHORT).show();
@@ -125,9 +135,11 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(MainActivity.this, "Failed to clear API key", Toast.LENGTH_SHORT).show();
             }
+            dialog.dismiss();
         });
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss());
-        android.app.AlertDialog dialog = builder.create();
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
         dialog.show();
     }
 
