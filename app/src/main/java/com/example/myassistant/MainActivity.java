@@ -157,9 +157,10 @@ public class MainActivity extends AppCompatActivity {
 
     private final ActivityResultLauncher<String[]> locationPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-                Boolean fineGranted = result.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false);
-                Boolean coarseGranted = result.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false);
-                if (Boolean.TRUE.equals(fineGranted) || Boolean.TRUE.equals(coarseGranted)) {
+                Boolean fineGranted = result.get(Manifest.permission.ACCESS_FINE_LOCATION);
+                Boolean coarseGranted = result.get(Manifest.permission.ACCESS_COARSE_LOCATION);
+
+                if ((fineGranted != null && fineGranted) || (coarseGranted != null && coarseGranted)) {
                     fetchLastLocationOnce();
                 } else {
                     latestLocationText = "";
@@ -287,6 +288,25 @@ public class MainActivity extends AppCompatActivity {
         updateKeyStatus();
     }
 
+    private void addOrUpdateNote(String title, String content) {
+        List<Note> notes = NotesStorage.loadNotes(this);
+        boolean noteExists = false;
+        for (Note note : notes) {
+            if (note.getTitle().equalsIgnoreCase(title)) {
+                note.setContent(content);
+                noteExists = true;
+                break;
+            }
+        }
+        if (!noteExists) {
+            int[] noteColors = getResources().getIntArray(R.array.note_colors);
+            int randomColor = noteColors[new java.util.Random().nextInt(noteColors.length)];
+            notes.add(new Note(title, content, randomColor));
+        }
+        NotesStorage.saveNotes(this, notes);
+    }
+
+
     private void setLoading(boolean loading) {
         runOnUiThread(() -> {
             progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
@@ -363,6 +383,22 @@ public class MainActivity extends AppCompatActivity {
             jsonBody.put("model", "arcee-ai/trinity-mini:free");
             jsonBody.put("temperature", 1.0);
             jsonBody.put("max_tokens", 4096);
+            JSONArray tools = new JSONArray();
+            JSONObject noteTool = new JSONObject();
+            noteTool.put("type", "function");
+            JSONObject function = new JSONObject();
+            function.put("name", "addOrUpdateNote");
+            function.put("description", "Add or update a note");
+            JSONObject parameters = new JSONObject();
+            parameters.put("type", "object");
+            JSONObject properties = new JSONObject();
+            properties.put("title", new JSONObject().put("type", "string").put("description", "The title of the note"));
+            properties.put("content", new JSONObject().put("type", "string").put("description", "The content of the note"));
+            parameters.put("properties", properties);
+            function.put("parameters", parameters);
+            noteTool.put("function", function);
+            tools.put(noteTool);
+            jsonBody.put("tools", tools);
             JSONArray messagesArray = new JSONArray();
             if (!notes.isEmpty()) {
                 JSONObject systemMsg = new JSONObject();
@@ -422,7 +458,6 @@ public class MainActivity extends AppCompatActivity {
                     });
                     return;
                 }
-                String reply = "";
                 try {
                     JSONObject json = new JSONObject(responseBody);
                     JSONArray choices = json.optJSONArray("choices");
@@ -430,32 +465,60 @@ public class MainActivity extends AppCompatActivity {
                         JSONObject choice = choices.getJSONObject(0);
                         JSONObject message = choice.optJSONObject("message");
                         if (message != null) {
-                            reply = message.optString("content", "").trim();
-                            if (reply.isEmpty() && message.has("reasoning")) {
-                                reply = message.optString("reasoning", "").trim();
-                            }
-                            if (reply.isEmpty() && choice.has("reasoning")) {
-                                reply = choice.optString("reasoning", "").trim();
+                            if (message.has("tool_calls")) {
+                                JSONArray toolCalls = message.getJSONArray("tool_calls");
+                                for (int i = 0; i < toolCalls.length(); i++) {
+                                    JSONObject toolCall = toolCalls.getJSONObject(i);
+                                    if ("function".equals(toolCall.getString("type"))) {
+                                        JSONObject functionCall = toolCall.getJSONObject("function");
+                                        String functionName = functionCall.getString("name");
+                                        if ("addOrUpdateNote".equals(functionName)) {
+                                            JSONObject arguments = new JSONObject(functionCall.getString("arguments"));
+                                            String title = arguments.optString("title", null);
+                                            String content = arguments.optString("content", null);
+                                            if (title != null && content != null) {
+                                                runOnUiThread(() -> {
+                                                    addOrUpdateNote(title, content);
+                                                    Toast.makeText(MainActivity.this, "Note updated by AI", Toast.LENGTH_SHORT).show();
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                String reply = message.optString("content", "").trim();
+                                if (reply.isEmpty() && message.has("reasoning")) {
+                                    reply = message.optString("reasoning", "").trim();
+                                }
+                                if (reply.isEmpty() && choice.has("reasoning")) {
+                                    reply = choice.optString("reasoning", "").trim();
+                                }
+                                if (reply.isEmpty()) {
+                                    reply = "[Model returned empty content.]";
+                                }
+                                final String finalReply = reply;
+                                runOnUiThread(() -> {
+                                    textViewResponse.setTag(finalReply);
+                                    renderMarkdownToTextView(finalReply);
+                                    if (finalReply.trim().isEmpty()) {
+                                        buttonCopyResponse.setVisibility(View.GONE);
+                                    } else {
+                                        buttonCopyResponse.setVisibility(View.VISIBLE);
+                                    }
+                                });
                             }
                         }
                     }
-                    if (reply.isEmpty()) {
-                        reply = "[Model returned empty content.]";
-                    }
                 } catch (JSONException e) {
-                    reply = "Response parse failed:\n" + responseBody;
+                    final String errorReply = "Response parse failed:\n" + responseBody;
+                    runOnUiThread(() -> {
+                        textViewResponse.setText(errorReply);
+                    });
+                } finally {
+                    runOnUiThread(() -> {
+                        setLoading(false);
+                    });
                 }
-                final String finalReply = reply;
-                runOnUiThread(() -> {
-                    textViewResponse.setTag(finalReply);
-                    renderMarkdownToTextView(finalReply);
-                    if (finalReply.trim().isEmpty()) {
-                        buttonCopyResponse.setVisibility(View.GONE);
-                    } else {
-                        buttonCopyResponse.setVisibility(View.VISIBLE);
-                    }
-                    setLoading(false);
-                });
             }
         });
     }

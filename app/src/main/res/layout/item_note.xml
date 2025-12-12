@@ -33,7 +33,7 @@
             android:layout_centerVertical="true"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_delete_24"
-            android:tint="@color/textColorSecondary"
+            app:tint="@color/textColorSecondary"
             android:contentDescription="Delete Note" />
 
     </RelativeLayout>
