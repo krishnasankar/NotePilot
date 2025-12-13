@@ -53,6 +53,7 @@ public class NotesActivity extends AppCompatActivity {
 
         recyclerViewNotes = findViewById(R.id.recyclerViewNotes);
         FloatingActionButton fabAddNote = findViewById(R.id.fabAddNote);
+        FloatingActionButton fabChat = findViewById(R.id.fabChat);
 
         noteColors = getResources().getIntArray(R.array.note_colors);
         notes = NotesStorage.loadNotes(this);
@@ -93,6 +94,11 @@ public class NotesActivity extends AppCompatActivity {
             intent.putExtra("note", newNote);
             intent.putExtra("notePosition", -1);
             noteDetailLauncher.launch(intent);
+        });
+
+        fabChat.setOnClickListener(v -> {
+            Intent intent = new Intent(NotesActivity.this, MainActivity.class);
+            startActivity(intent);
         });
     }
 

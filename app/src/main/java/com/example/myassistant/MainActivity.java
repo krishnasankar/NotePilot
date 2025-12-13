@@ -54,21 +54,24 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import java.util.Random;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
     private EditText editTextPrompt;
-    private Button buttonSend;
+    private ImageButton buttonSend;
     private ProgressBar progressBar;
-    private TextView textViewResponse;
-    private Button buttonNotes;
-    private ImageButton buttonCopyResponse;
+    private RecyclerView chatRecyclerView;
+    private ChatAdapter chatAdapter;
+    private List<ChatMessage> chatHistory = new ArrayList<>();
+    private ImageButton buttonNotes;
     private ImageButton buttonSettings;
     private View keyStatusDot;
     private FusedLocationProviderClient fusedLocationClient;
     private String latestLocationText = "";
-    private View responseCard;
     private OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
@@ -151,7 +154,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateKeyStatus() {
-        if (buttonSettings == null || keyStatusDot == null || textViewResponse == null || buttonCopyResponse == null) {
+        if (buttonSettings == null || keyStatusDot == null || chatRecyclerView == null) {
             return;
         }
         String apiKey = ApiKeyStore.getKey(this);
@@ -162,10 +165,8 @@ public class MainActivity extends AppCompatActivity {
                 ? ContextCompat.getColor(this, R.color.key_present_green)
                 : ContextCompat.getColor(this, R.color.key_missing_red);
         keyStatusDot.setBackgroundTintList(ColorStateList.valueOf(color));
-        boolean hasText = textViewResponse.getText().toString().trim().length() > 0;
+        boolean hasText = chatHistory.size() > 0;
         boolean isLoading = false;
-        buttonCopyResponse.setEnabled(!isLoading && hasText);
-        buttonCopyResponse.setVisibility(hasText ? View.VISIBLE : View.GONE);
     }
 
     private final ActivityResultLauncher<String[]> locationPermissionLauncher =
@@ -262,12 +263,14 @@ public class MainActivity extends AppCompatActivity {
         editTextPrompt = findViewById(R.id.editTextPrompt);
         buttonSend = findViewById(R.id.buttonSend);
         progressBar = findViewById(R.id.progressBar);
-        textViewResponse = findViewById(R.id.textViewResponse);
+        chatRecyclerView = findViewById(R.id.chat_recycler_view);
         buttonNotes = findViewById(R.id.buttonNotes);
-        buttonCopyResponse = findViewById(R.id.buttonCopyResponse);
-        responseCard = findViewById(R.id.responseCard);
         ImageButton buttonClearInput = findViewById(R.id.buttonClearInput);
         buttonClearInput.setOnClickListener(v -> editTextPrompt.setText(""));
+
+        chatAdapter = new ChatAdapter(chatHistory);
+        chatRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        chatRecyclerView.setAdapter(chatAdapter);
 
         buttonSend.setOnClickListener(v -> {
             hideKeyboardAndClearFocus();
@@ -276,22 +279,13 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(MainActivity.this, "Enter a question", Toast.LENGTH_SHORT).show();
                 return;
             }
+            editTextPrompt.setText("");
+            addToChatHistory(new ChatMessage(prompt, ChatMessage.Author.USER));
             callOpenRouterWithNotes(prompt);
         });
         buttonNotes.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, NotesActivity.class);
             startActivity(intent);
-        });
-        buttonCopyResponse.setOnClickListener(v -> {
-            String text = textViewResponse.getText().toString().trim();
-            if (!text.isEmpty()) {
-                android.content.ClipboardManager clipboard =
-                        (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                android.content.ClipData clip =
-                        android.content.ClipData.newPlainText("response", text);
-                clipboard.setPrimaryClip(clip);
-                Toast.makeText(MainActivity.this, "Copied to clipboard", Toast.LENGTH_SHORT).show();
-            }
         });
         buttonSettings.setOnClickListener(v -> showApiKeyDialog());
         updateKeyStatus();
@@ -304,6 +298,12 @@ public class MainActivity extends AppCompatActivity {
                 imm.showSoftInput(editTextPrompt, InputMethodManager.SHOW_IMPLICIT);
             }
         }, 200);
+    }
+
+    private void addToChatHistory(ChatMessage message) {
+        chatHistory.add(message);
+        chatAdapter.notifyItemInserted(chatHistory.size() - 1);
+        chatRecyclerView.scrollToPosition(chatHistory.size() - 1);
     }
 
     private boolean addOrUpdateNote(String title, String content) {
@@ -325,91 +325,13 @@ public class MainActivity extends AppCompatActivity {
         return !noteExists;
     }
 
-    // Ask for user consent before AI/system modifies note content,
-    // then apply the change only if approved.
-    private void requestAiAddOrUpdateNoteWithConsent(String title, String content, String sourceTag) {
-        runOnUiThread(() -> {
-            List<Note> notes = NotesStorage.loadNotes(MainActivity.this);
-            if (notes == null) notes = new java.util.ArrayList<>();
-
-            Note target = notes.stream().filter(n -> n.getTitle() != null && n.getTitle().equalsIgnoreCase(title)).findFirst().orElse(null);
-
-            String oldTitle = title;
-            String oldContent = (target != null && target.getContent() != null) ? target.getContent() : "";
-            String newTitle = title;
-            String newContent = content;
-
-            List<Note> finalNotes = notes;
-            ContentChangeGuard.confirmContentChange(
-                    MainActivity.this,
-                    oldTitle,
-                    oldContent,
-                    newTitle,
-                    newContent,
-                    sourceTag,
-                    approved -> {
-                        if (approved) {
-                            boolean created = false;
-                            if (target != null) {
-                                target.setContent(newContent);
-                            } else {
-                                int[] noteColors = getResources().getIntArray(R.array.note_colors);
-                                int randomColor = noteColors[new Random().nextInt(noteColors.length)];
-                                finalNotes.add(new Note(newTitle, newContent, randomColor));
-                                created = true;
-                            }
-                            NotesStorage.saveNotes(MainActivity.this, finalNotes);
-
-                            String msg = created ? "Created note '" + newTitle + "'." : "Updated note '" + newTitle + "'.";
-                            Object prevTag = textViewResponse.getTag();
-                            String prev = prevTag instanceof String ? (String) prevTag : textViewResponse.getText().toString();
-                            String combined = (prev == null || prev.trim().isEmpty()) ? msg : (prev + "\n" + msg);
-                            textViewResponse.setTag(combined);
-                            renderMarkdownToTextView(combined);
-                            Toast.makeText(MainActivity.this, "Applied change: " + newTitle, Toast.LENGTH_SHORT).show();
-                        } else {
-                            String msg = "Declined change for '" + newTitle + "'.";
-                            Object prevTag = textViewResponse.getTag();
-                            String prev = prevTag instanceof String ? (String) prevTag : textViewResponse.getText().toString();
-                            String combined = (prev == null || prev.trim().isEmpty()) ? msg : (prev + "\n" + msg);
-                            textViewResponse.setTag(combined);
-                            renderMarkdownToTextView(combined);
-                        }
-                    }
-            );
-        });
-    }
-
     private void setLoading(boolean loading) {
         runOnUiThread(() -> {
             progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
             buttonSend.setEnabled(!loading);
             if (buttonNotes != null) buttonNotes.setEnabled(!loading);
-            boolean hasText = textViewResponse.getText().toString().trim().length() > 0;
-            buttonCopyResponse.setEnabled(!loading && hasText);
-            if (loading) {
-                startResponseCardAnimation();
-            } else {
-                stopResponseCardAnimation();
-            }
+            boolean hasText = chatHistory.size() > 0;
         });
-    }
-
-    private void startResponseCardAnimation() {
-        if (responseCard == null) return;
-        if (loadingAnimation == null) {
-            loadingAnimation = new AlphaAnimation(0.3f, 1.0f);
-            loadingAnimation.setDuration(800);
-            loadingAnimation.setRepeatMode(Animation.REVERSE);
-            loadingAnimation.setRepeatCount(Animation.INFINITE);
-        }
-        responseCard.startAnimation(loadingAnimation);
-    }
-
-    private void stopResponseCardAnimation() {
-        if (responseCard == null) return;
-        responseCard.clearAnimation();
-        responseCard.setAlpha(1.0f);
     }
 
     private void callOpenRouterWithNotes(String prompt) {
@@ -477,14 +399,27 @@ public class MainActivity extends AppCompatActivity {
                 JSONObject systemMsg = new JSONObject();
                 systemMsg.put("role", "system");
                 systemMsg.put("content",
-                        "You are a helpful assistant. The user has these personal notes. " +
-                                "Use them as context where relevant:\n\n" + notes + "\n\n" + contextSnippet);
+                        "You are a helpful personal assistant. The user's notes are provided below, enclosed in '--- Start of Note ---' and '--- End of Note ---'. When the user asks a question, your primary task is to **thoroughly search the provided notes** to find the answer.\n" +
+                        "- If you find relevant information, use it to directly answer the question.\n" +
+                        "- If the user asks about reminders, tasks, or anything that might be in their notes, search for keywords like 'reminder', 'task', 'todo', etc.\n" +
+                        "- If you cannot find an answer in the notes, you must explicitly state that you could not find any relevant information in the user's notes.\n" +
+                        "- Do not make up information. Your knowledge is limited to the notes provided.\n" +
+                        "- You also have the ability to add or update notes using the 'addOrUpdateNote' tool if the user explicitly asks you to.\n\n" + notes + "\n\n" + contextSnippet);
                 messagesArray.put(systemMsg);
             }
+
+            for (ChatMessage message : chatHistory) {
+                JSONObject chatMessage = new JSONObject();
+                chatMessage.put("role", message.getAuthor() == ChatMessage.Author.USER ? "user" : "assistant");
+                chatMessage.put("content", message.getContent());
+                messagesArray.put(chatMessage);
+            }
+
             JSONObject userMessage = new JSONObject();
             userMessage.put("role", "user");
             userMessage.put("content", prompt);
             messagesArray.put(userMessage);
+
             jsonBody.put("messages", messagesArray);
         } catch (JSONException e) {
             setLoading(false);
@@ -511,11 +446,7 @@ public class MainActivity extends AppCompatActivity {
                     msg = "Request failed:\n" + e.getMessage();
                 }
                 runOnUiThread(() -> {
-                    textViewResponse.setTag(msg);
-                    renderMarkdownToTextView(msg);
-                    buttonCopyResponse.setVisibility(
-                            msg.trim().isEmpty() ? View.GONE : View.VISIBLE
-                    );
+                    addToChatHistory(new ChatMessage(msg, ChatMessage.Author.MODEL));
                     setLoading(false);
                 });
             }
@@ -526,7 +457,7 @@ public class MainActivity extends AppCompatActivity {
                 if (!response.isSuccessful()) {
                     final String err = "❌ Error:\n" + responseBody;
                     runOnUiThread(() -> {
-                        textViewResponse.setText(err);
+                        addToChatHistory(new ChatMessage(err, ChatMessage.Author.MODEL));
                         setLoading(false);
                     });
                     return;
@@ -540,14 +471,6 @@ public class MainActivity extends AppCompatActivity {
                         if (message != null) {
                             if (message.has("tool_calls")) {
                                 JSONArray toolCalls = message.getJSONArray("tool_calls");
-                                runOnUiThread(() -> {
-                                    String preface = "AI requested note changes.";
-                                    Object prevTag = textViewResponse.getTag();
-                                    String prev = prevTag instanceof String ? (String) prevTag : textViewResponse.getText().toString();
-                                    String combined = (prev == null || prev.trim().isEmpty()) ? preface : (prev + "\n\n" + preface);
-                                    textViewResponse.setTag(combined);
-                                    renderMarkdownToTextView(combined);
-                                });
                                 for (int i = 0; i < toolCalls.length(); i++) {
                                     JSONObject toolCall = toolCalls.getJSONObject(i);
                                     if ("function".equals(toolCall.getString("type"))) {
@@ -558,7 +481,12 @@ public class MainActivity extends AppCompatActivity {
                                             String title = arguments.optString("title", null);
                                             String content = arguments.optString("content", null);
                                             if (title != null && content != null) {
-                                                requestAiAddOrUpdateNoteWithConsent(title, content, "AI Assistant");
+                                                runOnUiThread(() -> {
+                                                    boolean created = addOrUpdateNote(title, content);
+                                                    String summary = (created ? "I have created a new note titled '" : "I have updated the note titled '") + title + "'.";
+                                                    addToChatHistory(new ChatMessage(summary, ChatMessage.Author.MODEL));
+                                                    Toast.makeText(MainActivity.this, "Note updated by AI", Toast.LENGTH_SHORT).show();
+                                                });
                                             }
                                         }
                                     }
@@ -576,13 +504,7 @@ public class MainActivity extends AppCompatActivity {
                                 }
                                 final String finalReply = reply;
                                 runOnUiThread(() -> {
-                                    textViewResponse.setTag(finalReply);
-                                    renderMarkdownToTextView(finalReply);
-                                    if (finalReply.trim().isEmpty()) {
-                                        buttonCopyResponse.setVisibility(View.GONE);
-                                    } else {
-                                        buttonCopyResponse.setVisibility(View.VISIBLE);
-                                    }
+                                    addToChatHistory(new ChatMessage(finalReply, ChatMessage.Author.MODEL));
                                 });
                             }
                         }
@@ -590,7 +512,7 @@ public class MainActivity extends AppCompatActivity {
                 } catch (JSONException e) {
                     final String errorReply = "Response parse failed:\n" + responseBody;
                     runOnUiThread(() -> {
-                        textViewResponse.setText(errorReply);
+                        addToChatHistory(new ChatMessage(errorReply, ChatMessage.Author.MODEL));
                     });
                 } finally {
                     runOnUiThread(() -> {
@@ -613,78 +535,5 @@ public class MainActivity extends AppCompatActivity {
         if (editTextPrompt != null) {
             editTextPrompt.clearFocus();
         }
-    }
-
-    private String markdownToHtmlString(String md) {
-        if (md == null) return "";
-        String s = md.replace("\r\n", "\n").replace("\r", "\n");
-        s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-        Pattern linkPattern = Pattern.compile("\\[([^\\]]+)\\]\\(([^)]+)\\)");
-        Matcher mlink = linkPattern.matcher(s);
-        StringBuffer sbLinks = new StringBuffer();
-        while (mlink.find()) {
-            String text = mlink.group(1);
-            String url = mlink.group(2);
-            String repl = "<a href=\"" + url + "\">" + text + "</a>";
-            mlink.appendReplacement(sbLinks, repl);
-        }
-        mlink.appendTail(sbLinks);
-        s = sbLinks.toString();
-        for (int i = 6; i >= 1; i--) {
-            String hashes = new String(new char[i]).replace("\0", "#");
-            s = s.replaceAll("(?m)^" + Pattern.quote(hashes) + "\\s*(.+)$", "<h" + i + ">$1</h" + i + ">");
-        }
-        String[] lines = s.split("\n");
-        StringBuilder out = new StringBuilder();
-        boolean inList = false;
-        for (String line : lines) {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-                if (!inList) {
-                    inList = true;
-                    out.append("<ul>");
-                }
-                String item = trimmed.substring(2).trim();
-                out.append("<li>").append(item).append("</li>");
-            } else {
-                if (inList) {
-                    out.append("</ul>");
-                    inList = false;
-                }
-                if (trimmed.isEmpty()) {
-                    out.append("\n\n");
-                } else {
-                    out.append(line).append("\n");
-                }
-            }
-        }
-        if (inList) out.append("</ul>");
-        s = out.toString();
-        s = s.replaceAll("\\*\\*(.+?)\\*\\*", "<b>$1</b>");
-        s = s.replaceAll("(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)", "<i>$1</i>");
-        String[] paras = s.split("\n{2,}");
-        StringBuilder html = new StringBuilder();
-        for (String p : paras) {
-            String trimmed = p.trim();
-            if (trimmed.startsWith("<h") || trimmed.startsWith("<ul") || trimmed.isEmpty()) {
-                html.append(trimmed).append("\n\n");
-            } else {
-                html.append("<p>").append(trimmed).append("</p>\n\n");
-            }
-        }
-        return html.toString().trim();
-    }
-
-    private void renderMarkdownToTextView(String rawMarkdown) {
-        String html = markdownToHtmlString(rawMarkdown);
-        Spanned sp;
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-            sp = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY);
-        } else {
-            sp = Html.fromHtml(html);
-        }
-        textViewResponse.setText(sp);
-        textViewResponse.setMovementMethod(LinkMovementMethod.getInstance());
-        textViewResponse.setLineSpacing(6f, 1.05f);
     }
 }
