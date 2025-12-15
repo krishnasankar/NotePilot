@@ -88,7 +88,11 @@ public class NotesFragment extends Fragment {
                     notes.set(noteIndex, newNote);
 
                     NotesStorage.saveNotes(getContext(), notes);
-                    sortAndDisplay();
+                    sortAndDisplay(() -> {
+                        if (newNote.isPinned()) {
+                            recyclerViewNotes.scrollToPosition(0);
+                        }
+                    });
                 }
             }
 
@@ -113,13 +117,17 @@ public class NotesFragment extends Fragment {
     }
 
     private void sortAndDisplay() {
+        sortAndDisplay(null);
+    }
+
+    private void sortAndDisplay(Runnable callback) {
         Collections.sort(notes, (n1, n2) -> {
             if (n1.isPinned() && !n2.isPinned()) return -1;
             if (!n1.isPinned() && n2.isPinned()) return 1;
             if (n1.isPinned() && n2.isPinned()) return Long.compare(n2.getPinnedTimestamp(), n1.getPinnedTimestamp());
             return Long.compare(n2.getLastModified(), n1.getLastModified());
         });
-        noteAdapter.submitList(new ArrayList<>(notes));
+        noteAdapter.submitList(new ArrayList<>(notes), callback);
     }
 
     private void loadNotesAndDisplay() {
