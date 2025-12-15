@@ -244,12 +244,10 @@ public class ChatFragment extends Fragment {
             JSONArray messagesArray = new JSONArray();
             JSONObject systemMsg = new JSONObject();
             systemMsg.put("role", "system");
-            systemMsg.put("content",
-                    "You are a helpful personal assistant who has access to the users notes. Your main goal is to help users manage their notes. You can answer questions based on the notes provided, and you can add or update notes for the user.\n\n" +
-                            "When the user asks you to find their notes, find items from their notes, you should look for an existing note with a relevant title if they have provided any. If a relevant note exists, use that to form a response. If the user has asked for their notes in general, use the notes context below and show all relevant notes content as you see fit.\n\n" +
-                            "When the user asks you to create a reminder, task, or anything similar, you should look for an existing note with a relevant title (e.g., 'Reminders', 'Tasks', 'Birthdays'). If a relevant note exists, you should append the new information to that note. If no such note exists, you should create a new one with an appropriate title.\n\n" +
-                            "Always remember that you are an AI assistant. When you answer a question or perform an action, make it clear that you are doing so based on the information in the user's notes.\n\n" +
-                            "The user's notes are provided below, enclosed in '--- Start of Note ---' and '--- End of Note ---'. When the user asks a question, your primary task is to **thoroughly search the provided notes** to find the answer.\\n\n\n" + notes + "\n\n" + contextSnippet);
+            systemMsg.put("content", "You are a helpful personal assistant. Your primary role is to assist the user with their notes.\n\n" +
+"When the user asks a question, use the content of their notes, provided below, to give a comprehensive answer. Announce that you are using the notes in your response.\n\n" +
+"When the user asks you to add or update a note, you must use the 'addOrUpdateNote' function. Be intelligent about whether to append to an existing note or create a new one based on the title.\n\n" +
+"Here are the user's notes:\n" + notes + "\n\n" + contextSnippet);
             messagesArray.put(systemMsg);
 
 
