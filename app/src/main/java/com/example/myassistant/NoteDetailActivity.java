@@ -21,13 +21,16 @@ import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class NoteDetailActivity extends AppCompatActivity {
 
     private EditText editTextNoteTitle;
     private EditText editTextNoteContent;
     private Note note;
     private boolean isNewNote;
-    private int notePosition;
+    private Note originalNote;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,10 +49,11 @@ public class NoteDetailActivity extends AppCompatActivity {
         FloatingActionButton fabDeleteNote = findViewById(R.id.fabDeleteNote);
 
         note = (Note) getIntent().getSerializableExtra("note");
-        notePosition = getIntent().getIntExtra("notePosition", -1);
+        int notePosition = getIntent().getIntExtra("notePosition", -1);
         isNewNote = notePosition == -1;
 
         if (note != null) {
+            originalNote = new Note(note); // Make a copy for comparison
             editTextNoteTitle.setText(note.getTitle());
             editTextNoteContent.setText(note.getContent());
 
@@ -75,7 +79,6 @@ public class NoteDetailActivity extends AppCompatActivity {
             @Override
             public void handleOnBackPressed() {
                 saveNote();
-                // Disable the callback to avoid a loop, and trigger the default back action
                 finish();
             }
         });
@@ -87,26 +90,57 @@ public class NoteDetailActivity extends AppCompatActivity {
 
         if (isNewNote && TextUtils.isEmpty(title) && TextUtils.isEmpty(content)) {
             setResult(Activity.RESULT_CANCELED);
-        } else {
-            if (note == null) {
-                note = new Note(title, content, 0);
-            }
-            note.setTitle(title);
-            note.setContent(content);
-
-            Intent resultIntent = new Intent();
-            resultIntent.putExtra("note", note);
-            resultIntent.putExtra("notePosition", notePosition);
-            setResult(Activity.RESULT_OK, resultIntent);
+            return;
         }
+
+        if (!isNewNote && originalNote != null &&
+                title.equals(originalNote.getTitle()) &&
+                content.equals(originalNote.getContent())) {
+            setResult(Activity.RESULT_CANCELED);
+            return;
+        }
+
+        note.setTitle(title);
+        note.setContent(content);
+
+        List<Note> notes = NotesStorage.loadNotes(this);
+        if (notes == null) {
+            notes = new ArrayList<>();
+        }
+
+        if (isNewNote) {
+            notes.add(note);
+        } else {
+            boolean found = false;
+            for (int i = 0; i < notes.size(); i++) {
+                if (notes.get(i).getId() == note.getId()) {
+                    notes.set(i, note);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) { // Should not happen with correct logic
+                notes.add(note);
+            }
+        }
+        NotesStorage.saveNotes(this, notes);
+        setResult(Activity.RESULT_OK);
     }
 
     private void deleteNote() {
-        Intent resultIntent = new Intent();
-        resultIntent.putExtra("notePosition", notePosition);
-        resultIntent.putExtra("deleteNote", true);
-        setResult(Activity.RESULT_OK, resultIntent);
-        finish();
+        if (!isNewNote) {
+            List<Note> notes = NotesStorage.loadNotes(this);
+            if (notes != null) {
+                for (int i = 0; i < notes.size(); i++) {
+                    if (notes.get(i).getId() == note.getId()) {
+                        notes.remove(i);
+                        break;
+                    }
+                }
+                NotesStorage.saveNotes(this, notes);
+            }
+        }
+        setResult(Activity.RESULT_OK);
     }
 
     private void showDeleteConfirmationDialog() {
@@ -121,6 +155,7 @@ public class NoteDetailActivity extends AppCompatActivity {
         buttonDelete.setOnClickListener(v -> {
             deleteNote();
             dialog.dismiss();
+            finish();
         });
 
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));

@@ -13,31 +13,38 @@ import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
-import java.util.List;
 
-public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder> {
+public class NoteAdapter extends ListAdapter<Note, NoteAdapter.NoteViewHolder> {
 
-    private final List<Note> notes;
     private final Context context;
     private final OnNoteClickListener listener;
 
     public interface OnNoteClickListener {
         void onNoteClick(Note note, int position);
         void onPinClick(Note note, int position);
+        void onDeleteClick(Note note, int position);
     }
 
-    public NoteAdapter(List<Note> notes, Context context, OnNoteClickListener listener) {
-        this.notes = notes;
+    public NoteAdapter(Context context, OnNoteClickListener listener) {
+        super(DIFF_CALLBACK);
         this.context = context;
         this.listener = listener;
-        setHasStableIds(true);
     }
 
-    @Override
-    public long getItemId(int position) {
-        return notes.get(position).hashCode();
-    }
+    private static final DiffUtil.ItemCallback<Note> DIFF_CALLBACK = new DiffUtil.ItemCallback<Note>() {
+        @Override
+        public boolean areItemsTheSame(@NonNull Note oldItem, @NonNull Note newItem) {
+            return oldItem.getId() == newItem.getId();
+        }
+
+        @Override
+        public boolean areContentsTheSame(@NonNull Note oldItem, @NonNull Note newItem) {
+            return oldItem.equals(newItem);
+        }
+    };
 
     @NonNull
     @Override
@@ -48,7 +55,7 @@ public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder
 
     @Override
     public void onBindViewHolder(@NonNull NoteViewHolder holder, int position) {
-        Note note = notes.get(position);
+        Note note = getItem(position);
         holder.bind(note, listener);
 
         String displayTitle = !TextUtils.isEmpty(note.getTitle())
@@ -64,11 +71,11 @@ public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder
         });
 
         holder.buttonDeleteNote.setOnClickListener(v -> {
-            showDeleteConfirmationDialog(holder.getAdapterPosition());
+            showDeleteConfirmationDialog(note, holder.getAdapterPosition());
         });
     }
 
-    private void showDeleteConfirmationDialog(int position) {
+    private void showDeleteConfirmationDialog(Note note, int position) {
         final Dialog dialog = new Dialog(context);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(R.layout.dialog_delete_note);
@@ -79,22 +86,13 @@ public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder
         buttonCancel.setOnClickListener(v -> dialog.dismiss());
         buttonDelete.setOnClickListener(v -> {
             if (position != RecyclerView.NO_POSITION) {
-                notes.remove(position);
-                notifyItemRemoved(position);
-                notifyItemRangeChanged(position, notes.size());
-                NotesStorage.saveNotes(context, notes);
+                listener.onDeleteClick(note, position);
             }
             dialog.dismiss();
         });
 
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         dialog.show();
-    }
-
-
-    @Override
-    public int getItemCount() {
-        return notes.size();
     }
 
     static class NoteViewHolder extends RecyclerView.ViewHolder {

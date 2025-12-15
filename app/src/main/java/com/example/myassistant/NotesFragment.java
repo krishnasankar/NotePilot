@@ -27,32 +27,14 @@ public class NotesFragment extends Fragment {
 
     private RecyclerView recyclerViewNotes;
     private NoteAdapter noteAdapter;
-    private List<Note> notes;
+    private final List<Note> notes = new ArrayList<>(); // The single source of truth.
     private int[] noteColors;
 
     private final ActivityResultLauncher<Intent> noteDetailLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
-                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                    boolean deleteNote = result.getData().getBooleanExtra("deleteNote", false);
-                    int position = result.getData().getIntExtra("notePosition", -1);
-
-                    if (deleteNote && position != -1) {
-                        notes.remove(position);
-                        noteAdapter.notifyItemRemoved(position);
-                        noteAdapter.notifyItemRangeChanged(position, notes.size());
-                        NotesStorage.saveNotes(getContext(), notes);
-                    } else {
-                        Note returnedNote = (Note) result.getData().getSerializableExtra("note");
-                        if (returnedNote != null) {
-                            if (position == -1) { // New note
-                                notes.add(returnedNote);
-                            } else { // Existing note
-                                notes.set(position, returnedNote);
-                            }
-                            sortAndRefreshNotes();
-                        }
-                    }
+                if (result.getResultCode() == RESULT_OK) {
+                    loadNotesAndDisplay();
                 }
             });
 
@@ -65,38 +47,7 @@ public class NotesFragment extends Fragment {
         FloatingActionButton fabAddNote = view.findViewById(R.id.fabAddNote);
         noteColors = getResources().getIntArray(R.array.note_colors);
 
-        notes = NotesStorage.loadNotes(getContext());
-
-        if (notes == null) {
-            notes = new ArrayList<>();
-        }
-
-        if (notes.isEmpty()) {
-            notes.add(new Note("Welcome to Notes!", "This is a sample note.", noteColors[0]));
-        }
-
-        noteAdapter = new NoteAdapter(notes, getContext(), new NoteAdapter.OnNoteClickListener() {
-            @Override
-            public void onNoteClick(Note note, int position) {
-                Intent intent = new Intent(getContext(), NoteDetailActivity.class);
-                intent.putExtra("note", note);
-                intent.putExtra("notePosition", position);
-                noteDetailLauncher.launch(intent);
-            }
-
-            @Override
-            public void onPinClick(Note note, int position) {
-                note.setPinned(!note.isPinned());
-                sortAndRefreshNotes(); // Resort the current list
-                if (getContext() != null) {
-                    // Save the entire list to persist the pin change
-                    NotesStorage.saveNotes(getContext(), notes);
-                }
-            }
-        });
-
-        recyclerViewNotes.setLayoutManager(new LinearLayoutManager(getContext()));
-        recyclerViewNotes.setAdapter(noteAdapter);
+        setupAdapter();
 
         fabAddNote.setOnClickListener(v -> {
             int randomColor = noteColors[new Random().nextInt(noteColors.length)];
@@ -110,55 +61,99 @@ public class NotesFragment extends Fragment {
         return view;
     }
 
-    private void sortAndRefreshNotes() {
-        if (notes == null) return;
-        List<Note> sortedList = new ArrayList<>(notes);
-        Collections.sort(sortedList, (n1, n2) -> {
-            if (n1.isPinned() && !n2.isPinned()) {
-                return -1;
-            } else if (!n1.isPinned() && n2.isPinned()) {
-                return 1;
-            } else if (n1.isPinned() && n2.isPinned()) {
-                return Long.compare(n2.getPinnedTimestamp(), n1.getPinnedTimestamp());
-            } else {
-                return Long.compare(n2.getLastModified(), n1.getLastModified());
+    private void setupAdapter() {
+        noteAdapter = new NoteAdapter(getContext(), new NoteAdapter.OnNoteClickListener() {
+            @Override
+            public void onNoteClick(Note note, int position) {
+                Intent intent = new Intent(getContext(), NoteDetailActivity.class);
+                intent.putExtra("note", note);
+                intent.putExtra("notePosition", position);
+                noteDetailLauncher.launch(intent);
+            }
+
+            @Override
+            public void onPinClick(Note note, int position) {
+                int noteIndex = -1;
+                for (int i = 0; i < notes.size(); i++) {
+                    if (notes.get(i).getId() == note.getId()) {
+                        noteIndex = i;
+                        break;
+                    }
+                }
+
+                if (noteIndex != -1) {
+                    Note oldNote = notes.get(noteIndex);
+                    Note newNote = new Note(oldNote);
+                    newNote.setPinned(!oldNote.isPinned());
+                    notes.set(noteIndex, newNote);
+
+                    NotesStorage.saveNotes(getContext(), notes);
+                    sortAndDisplay();
+                }
+            }
+
+            @Override
+            public void onDeleteClick(Note note, int position) {
+                Note noteToRemove = null;
+                for (Note noteInList : notes) {
+                    if (noteInList.getId() == note.getId()) {
+                        noteToRemove = noteInList;
+                        break;
+                    }
+                }
+                if (noteToRemove != null) {
+                    notes.remove(noteToRemove);
+                    NotesStorage.saveNotes(getContext(), notes);
+                    sortAndDisplay();
+                }
             }
         });
-
-        for (int i = 0; i < sortedList.size(); i++) {
-            int oldPosition = notes.indexOf(sortedList.get(i));
-            if (oldPosition != i) {
-                notes.remove(oldPosition);
-                notes.add(i, sortedList.get(i));
-                noteAdapter.notifyItemMoved(oldPosition, i);
-            }
-        }
-        noteAdapter.notifyItemRangeChanged(0, notes.size());
+        recyclerViewNotes.setLayoutManager(new LinearLayoutManager(getContext()));
+        recyclerViewNotes.setAdapter(noteAdapter);
     }
 
-    private void loadAndRefreshNotes() {
-        if (getContext() == null || notes == null || noteAdapter == null) return;
+    private void sortAndDisplay() {
+        Collections.sort(notes, (n1, n2) -> {
+            if (n1.isPinned() && !n2.isPinned()) return -1;
+            if (!n1.isPinned() && n2.isPinned()) return 1;
+            if (n1.isPinned() && n2.isPinned()) return Long.compare(n2.getPinnedTimestamp(), n1.getPinnedTimestamp());
+            return Long.compare(n2.getLastModified(), n1.getLastModified());
+        });
+        noteAdapter.submitList(new ArrayList<>(notes));
+    }
 
-        List<Note> reloadedNotes = NotesStorage.loadNotes(getContext());
-        notes.clear();
-        notes.addAll(reloadedNotes);
-        sortAndRefreshNotes();
-        NotesStorage.saveNotes(getContext(), notes);
+    private void loadNotesAndDisplay() {
+        if (getContext() == null) return;
+
+        List<Note> loadedNotes = NotesStorage.loadNotes(getContext());
+        if (loadedNotes == null) {
+            loadedNotes = new ArrayList<>();
+        }
+
+        if (loadedNotes.isEmpty()) {
+            if (noteColors != null && noteColors.length > 0) {
+                loadedNotes.add(new Note("Welcome to Notes!", "This is a sample note.", noteColors[0]));
+                NotesStorage.saveNotes(getContext(), loadedNotes);
+            }
+        }
+
+        this.notes.clear();
+        this.notes.addAll(loadedNotes);
+
+        sortAndDisplay();
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        NotesStorage.saveNotes(getContext(), notes);
-        loadAndRefreshNotes();
+        loadNotesAndDisplay();
     }
 
     @Override
     public void onHiddenChanged(boolean hidden) {
         super.onHiddenChanged(hidden);
         if (!hidden) {
-            loadAndRefreshNotes();
+            loadNotesAndDisplay();
         }
     }
-
 }
