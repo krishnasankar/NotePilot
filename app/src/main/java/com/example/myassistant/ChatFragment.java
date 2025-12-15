@@ -329,15 +329,26 @@ public class ChatFragment extends Fragment {
                                         String functionName = functionCall.getString("name");
                                         if ("addOrUpdateNote".equals(functionName)) {
                                             JSONObject arguments = new JSONObject(functionCall.getString("arguments"));
-                                            String title = arguments.optString("title", null);
-                                            String content = arguments.optString("content", null);
+                                            final String title = arguments.optString("title", null);
+                                            final String content = arguments.optString("content", null);
                                             if (title != null && content != null) {
                                                 if (getActivity() != null) {
                                                     getActivity().runOnUiThread(() -> {
-                                                        boolean created = addOrUpdateNote(title, content);
-                                                        String summary = (created ? "I have created a new note titled '" : "I have updated the note titled '") + title + "'.";
-                                                        addToChatHistory(new ChatMessage(summary, ChatMessage.Author.MODEL));
-                                                        Toast.makeText(getContext(), "Note updated by AI", Toast.LENGTH_SHORT).show();
+                                                        if (getContext() != null && PermissionStore.getEditPermission(getContext())) {
+                                                            boolean created = addOrUpdateNote(title, content);
+                                                            String summary = (created ? "I have created a new note titled '" : "I have updated the note titled '") + title + "'.";
+                                                            addToChatHistory(new ChatMessage(summary, ChatMessage.Author.MODEL));
+                                                            Toast.makeText(getContext(), "Note updated by AI", Toast.LENGTH_SHORT).show();
+                                                        } else {
+                                                            if (getActivity() instanceof MainActivity) {
+                                                                ((MainActivity) getActivity()).showAiChangeConfirmationDialog(title, content, () -> {
+                                                                    boolean created = addOrUpdateNote(title, content);
+                                                                    String summary = (created ? "I have created a new note titled '" : "I have updated the note titled '") + title + "'.";
+                                                                    addToChatHistory(new ChatMessage(summary, ChatMessage.Author.MODEL));
+                                                                    Toast.makeText(getContext(), "Note updated by AI", Toast.LENGTH_SHORT).show();
+                                                                });
+                                                            }
+                                                        }
                                                     });
                                                 }
                                             }

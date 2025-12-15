@@ -4,6 +4,7 @@ import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ImageButton;
+import android.widget.Switch;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -90,8 +91,8 @@ public class MainActivity extends AppCompatActivity {
         View view = inflater.inflate(R.layout.dialog_api_key, null);
 
         android.widget.EditText input = view.findViewById(R.id.editApiKey);
+        Switch editPermissionSwitch = view.findViewById(R.id.editPermissionSwitch);
         android.widget.Button btnSave = view.findViewById(R.id.btnSave);
-        android.widget.Button btnClear = view.findViewById(R.id.btnClear);
         android.widget.Button btnCancel = view.findViewById(R.id.btnCancel);
 
         String existing = ApiKeyStore.getKey(this);
@@ -99,6 +100,8 @@ public class MainActivity extends AppCompatActivity {
             String masked = existing.length() > 8 ? "****" + existing.substring(existing.length() - 8) : "****";
             input.setText(masked);
         }
+
+        editPermissionSwitch.setChecked(PermissionStore.getEditPermission(this));
 
         android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
                 .setView(view)
@@ -110,33 +113,47 @@ public class MainActivity extends AppCompatActivity {
 
         btnSave.setOnClickListener(v -> {
             String value = input.getText().toString().trim();
-            if (value.isEmpty()) {
-                Toast.makeText(MainActivity.this, "API key cannot be empty", Toast.LENGTH_SHORT).show();
-                return;
+            boolean keyChanged = false;
+            if (!value.isEmpty() && !value.startsWith("****")) {
+                keyChanged = ApiKeyStore.saveKey(MainActivity.this, value);
             }
-            if (value.startsWith("****")) {
-                Toast.makeText(MainActivity.this, "No changes saved", Toast.LENGTH_SHORT).show();
-                dialog.dismiss();
-                return;
+
+            boolean permissionChanged = editPermissionSwitch.isChecked() != PermissionStore.getEditPermission(MainActivity.this);
+            if (permissionChanged) {
+                PermissionStore.setEditPermission(MainActivity.this, editPermissionSwitch.isChecked());
             }
-            boolean ok = ApiKeyStore.saveKey(MainActivity.this, value);
-            if (ok) {
-                Toast.makeText(MainActivity.this, "API key saved", Toast.LENGTH_SHORT).show();
-                updateKeyStatus();
+
+            if (keyChanged || permissionChanged) {
+                Toast.makeText(MainActivity.this, "Settings saved", Toast.LENGTH_SHORT).show();
+                if (keyChanged) updateKeyStatus();
             } else {
-                Toast.makeText(MainActivity.this, "Failed to save API key", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "No changes saved", Toast.LENGTH_SHORT).show();
             }
             dialog.dismiss();
         });
 
-        btnClear.setOnClickListener(v -> {
-            boolean ok = ApiKeyStore.clearKey(MainActivity.this);
-            if (ok) {
-                Toast.makeText(MainActivity.this, "API key cleared", Toast.LENGTH_SHORT).show();
-                updateKeyStatus();
-            } else {
-                Toast.makeText(MainActivity.this, "Failed to clear API key", Toast.LENGTH_SHORT).show();
-            }
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.show();
+    }
+
+    public void showAiChangeConfirmationDialog(String title, String content, Runnable onAllowed) {
+        android.view.LayoutInflater inflater = getLayoutInflater();
+        View view = inflater.inflate(R.layout.dialog_ai_change_confirmation, null);
+
+        android.widget.Button btnAllow = view.findViewById(R.id.buttonAllow);
+        android.widget.Button btnCancel = view.findViewById(R.id.buttonCancel);
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
+                .setView(view)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        }
+
+        btnAllow.setOnClickListener(v -> {
+            onAllowed.run();
             dialog.dismiss();
         });
 
