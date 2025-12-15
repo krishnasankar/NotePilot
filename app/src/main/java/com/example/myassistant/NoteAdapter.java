@@ -46,6 +46,15 @@ public class NoteAdapter extends ListAdapter<Note, NoteAdapter.NoteViewHolder> {
         }
     };
 
+    private static String htmlToPlainText(String html) {
+        if (TextUtils.isEmpty(html)) return "";
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            return android.text.Html.fromHtml(html, android.text.Html.FROM_HTML_MODE_LEGACY).toString();
+        } else {
+            return android.text.Html.fromHtml(html).toString();
+        }
+    }
+
     @NonNull
     @Override
     public NoteViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -60,7 +69,7 @@ public class NoteAdapter extends ListAdapter<Note, NoteAdapter.NoteViewHolder> {
 
         String displayTitle = !TextUtils.isEmpty(note.getTitle())
                 ? note.getTitle()
-                : note.getContent();
+                : htmlToPlainText(note.getContent());
         holder.textViewNoteTitle.setText(displayTitle);
         holder.itemView.setBackgroundColor(note.getColor());
 

@@ -28,19 +28,165 @@
         android:background="@color/noteBackgroundColor"
         android:layout_below="@+id/editTextNoteTitle"
         android:layout_marginTop="8dp"
-        android.layout_marginBottom="16dp"/>
+        android:layout_marginBottom="16dp"/>
 
-    <EditText
-        android:id="@+id/editTextNoteContent"
+    <HorizontalScrollView
+        android:id="@+id/richToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/titleSeparator"
+        android:layout_marginBottom="8dp"
+        android:overScrollMode="never"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnUndo"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="Undo"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRedo"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="Redo"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnBold"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="B"
+                android:textStyle="bold"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnItalic"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="I"
+                android:textStyle="italic"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnUnderline"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="U"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnStrike"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="S"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnH1"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="H1"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnH2"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="H2"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnBullets"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="•"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnNumbers"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="1."
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnQuote"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="Quote"
+                android:textAllCaps="false" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLink"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:insetLeft="8dp"
+                android:insetRight="8dp"
+                android:text="Link"
+                android:textAllCaps="false" />
+
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <jp.wasabeef.richeditor.RichEditor
+        android:id="@+id/richEditor"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@+id/titleSeparator"
-        android:background="@android:color/transparent"
-        android:gravity="top"
-        android:hint="Content"
-        android:inputType="textMultiLine|textCapSentences"
-        android:textColor="@color/textColorPrimary"
-        android:textColorHint="@color/textColorSecondary" />
+        android:layout_below="@+id/richToolbar"
+        android:background="@android:color/transparent" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabDeleteNote"
