@@ -4,41 +4,19 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/colorPrimary"
-    tools:context=".NotesActivity">
-
-    <TextView
-        android:id="@+id/textNotesTitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="24dp"
-        android:text="Your Notes"
-        android:textColor="@color/textColorPrimary"
-        android:textSize="24sp"
-        android:textStyle="bold" />
+    android:background="@android:color/transparent"
+    tools:context=".NotesFragment">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerViewNotes"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/textNotesTitle"
+        android:layout_alignParentTop="true"
         android:layout_marginTop="16dp"
         android:clipToPadding="false"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
         android:paddingBottom="80dp" />
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabChat"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_marginBottom="24dp"
-        android:layout_marginRight="-10dp"
-        android:layout_toStartOf="@id/fabAddNote"
-        android:src="@drawable/ic_chat_24"
-        app:backgroundTint="@color/white"
-        app:tint="@color/colorAccent" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabAddNote"

@@ -7,13 +7,16 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
+import io.noties.markwon.Markwon;
 
 public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder> {
 
     private final List<ChatMessage> messages;
+    private final Markwon markwon;
 
-    public ChatAdapter(List<ChatMessage> messages) {
+    public ChatAdapter(List<ChatMessage> messages, Markwon markwon) {
         this.messages = messages;
+        this.markwon = markwon;
     }
 
     @Override
@@ -30,7 +33,7 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
         } else {
             view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_chat_message, parent, false);
         }
-        return new ChatViewHolder(view);
+        return new ChatViewHolder(view, markwon);
     }
 
     @Override
@@ -46,14 +49,20 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
 
     static class ChatViewHolder extends RecyclerView.ViewHolder {
         private final TextView messageContent;
+        private final Markwon markwon;
 
-        public ChatViewHolder(@NonNull View itemView) {
+        public ChatViewHolder(@NonNull View itemView, Markwon markwon) {
             super(itemView);
-            messageContent = itemView.findViewById(R.id.chat_message_content);
+            this.messageContent = itemView.findViewById(R.id.chat_message_content);
+            this.markwon = markwon;
         }
 
         public void bind(ChatMessage message) {
-            messageContent.setText(message.getContent());
+            if (message.getAuthor() == ChatMessage.Author.USER) {
+                messageContent.setText(message.getContent());
+            } else {
+                markwon.setMarkdown(messageContent, message.getContent());
+            }
         }
     }
 }

@@ -1,11 +1,15 @@
 package com.example.myassistant;
 
-import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
@@ -49,7 +53,7 @@ public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder
 
         String displayTitle = !TextUtils.isEmpty(note.getTitle())
                 ? note.getTitle()
-                : getFirstLine(note.getContent());
+                : note.getContent();
         holder.textViewNoteTitle.setText(displayTitle);
         holder.itemView.setBackgroundColor(note.getColor());
 
@@ -59,31 +63,38 @@ public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder
             listener.onPinClick(note, holder.getAdapterPosition());
         });
 
-        holder.buttonDeleteNote.setOnClickListener(v -> new AlertDialog.Builder(context)
-                .setTitle("Delete Note")
-                .setMessage("Are you sure you want to delete this note?")
-                .setPositiveButton("Delete", (dialog, which) -> {
-                    int currentPosition = holder.getAdapterPosition();
-                    if (currentPosition != RecyclerView.NO_POSITION) {
-                        notes.remove(currentPosition);
-                        notifyItemRemoved(currentPosition);
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show());
+        holder.buttonDeleteNote.setOnClickListener(v -> {
+            showDeleteConfirmationDialog(holder.getAdapterPosition());
+        });
     }
+
+    private void showDeleteConfirmationDialog(int position) {
+        final Dialog dialog = new Dialog(context);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_delete_note);
+
+        Button buttonCancel = dialog.findViewById(R.id.buttonCancel);
+        Button buttonDelete = dialog.findViewById(R.id.buttonDelete);
+
+        buttonCancel.setOnClickListener(v -> dialog.dismiss());
+        buttonDelete.setOnClickListener(v -> {
+            if (position != RecyclerView.NO_POSITION) {
+                notes.remove(position);
+                notifyItemRemoved(position);
+                notifyItemRangeChanged(position, notes.size());
+                NotesStorage.saveNotes(context, notes);
+            }
+            dialog.dismiss();
+        });
+
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dialog.show();
+    }
+
 
     @Override
     public int getItemCount() {
         return notes.size();
-    }
-
-    private String getFirstLine(String text) {
-        if (TextUtils.isEmpty(text)) {
-            return "";
-        }
-        int firstNewLine = text.indexOf('\n');
-        return firstNewLine == -1 ? text : text.substring(0, firstNewLine);
     }
 
     static class NoteViewHolder extends RecyclerView.ViewHolder {

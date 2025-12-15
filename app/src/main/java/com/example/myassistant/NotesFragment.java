@@ -1,22 +1,29 @@
 package com.example.myassistant;
 
+import static android.app.Activity.RESULT_OK;
+
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import android.view.View;
 
-public class NotesActivity extends AppCompatActivity {
+public class NotesFragment extends Fragment {
 
     private RecyclerView recyclerViewNotes;
     private NoteAdapter noteAdapter;
@@ -27,36 +34,38 @@ public class NotesActivity extends AppCompatActivity {
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                    Note returnedNote = (Note) result.getData().getSerializableExtra("note");
+                    boolean deleteNote = result.getData().getBooleanExtra("deleteNote", false);
                     int position = result.getData().getIntExtra("notePosition", -1);
 
-                    if (position == -1) { // New note
-                        notes.add(returnedNote);
-                    } else { // Existing note
-                        notes.set(position, returnedNote);
+                    if (deleteNote && position != -1) {
+                        notes.remove(position);
+                        noteAdapter.notifyItemRemoved(position);
+                        noteAdapter.notifyItemRangeChanged(position, notes.size());
+                        NotesStorage.saveNotes(getContext(), notes);
+                    } else {
+                        Note returnedNote = (Note) result.getData().getSerializableExtra("note");
+                        if (returnedNote != null) {
+                            if (position == -1) { // New note
+                                notes.add(returnedNote);
+                            } else { // Existing note
+                                notes.set(position, returnedNote);
+                            }
+                            sortAndRefreshNotes();
+                        }
                     }
-                    sortAndRefreshNotes();
                 }
             });
 
+    @Nullable
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_notes);
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_notes, container, false);
 
-        View root = findViewById(android.R.id.content);
-        ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
-            int statusBarHeight = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
-            v.setPadding(v.getPaddingLeft(), statusBarHeight, v.getPaddingRight(), v.getPaddingBottom());
-            return windowInsets;
-        });
-
-        recyclerViewNotes = findViewById(R.id.recyclerViewNotes);
-        FloatingActionButton fabAddNote = findViewById(R.id.fabAddNote);
-        FloatingActionButton fabChat = findViewById(R.id.fabChat);
-
+        recyclerViewNotes = view.findViewById(R.id.recyclerViewNotes);
+        FloatingActionButton fabAddNote = view.findViewById(R.id.fabAddNote);
         noteColors = getResources().getIntArray(R.array.note_colors);
-        notes = NotesStorage.loadNotes(this);
+
+        notes = NotesStorage.loadNotes(getContext());
 
         if (notes == null) {
             notes = new ArrayList<>();
@@ -66,10 +75,10 @@ public class NotesActivity extends AppCompatActivity {
             notes.add(new Note("Welcome to Notes!", "This is a sample note.", noteColors[0]));
         }
 
-        noteAdapter = new NoteAdapter(notes, this, new NoteAdapter.OnNoteClickListener() {
+        noteAdapter = new NoteAdapter(notes, getContext(), new NoteAdapter.OnNoteClickListener() {
             @Override
             public void onNoteClick(Note note, int position) {
-                Intent intent = new Intent(NotesActivity.this, NoteDetailActivity.class);
+                Intent intent = new Intent(getContext(), NoteDetailActivity.class);
                 intent.putExtra("note", note);
                 intent.putExtra("notePosition", position);
                 noteDetailLauncher.launch(intent);
@@ -78,28 +87,27 @@ public class NotesActivity extends AppCompatActivity {
             @Override
             public void onPinClick(Note note, int position) {
                 note.setPinned(!note.isPinned());
-                sortAndRefreshNotes();
+                sortAndRefreshNotes(); // Resort the current list
+                if (getContext() != null) {
+                    // Save the entire list to persist the pin change
+                    NotesStorage.saveNotes(getContext(), notes);
+                }
             }
         });
 
-        recyclerViewNotes.setLayoutManager(new LinearLayoutManager(this));
+        recyclerViewNotes.setLayoutManager(new LinearLayoutManager(getContext()));
         recyclerViewNotes.setAdapter(noteAdapter);
-
-        sortAndRefreshNotes(); // Sort and refresh after the adapter is set
 
         fabAddNote.setOnClickListener(v -> {
             int randomColor = noteColors[new Random().nextInt(noteColors.length)];
             Note newNote = new Note("", "", randomColor);
-            Intent intent = new Intent(NotesActivity.this, NoteDetailActivity.class);
+            Intent intent = new Intent(getContext(), NoteDetailActivity.class);
             intent.putExtra("note", newNote);
             intent.putExtra("notePosition", -1);
             noteDetailLauncher.launch(intent);
         });
 
-        fabChat.setOnClickListener(v -> {
-            Intent intent = new Intent(NotesActivity.this, MainActivity.class);
-            startActivity(intent);
-        });
+        return view;
     }
 
     private void sortAndRefreshNotes() {
@@ -128,9 +136,29 @@ public class NotesActivity extends AppCompatActivity {
         noteAdapter.notifyItemRangeChanged(0, notes.size());
     }
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        NotesStorage.saveNotes(this, notes);
+    private void loadAndRefreshNotes() {
+        if (getContext() == null || notes == null || noteAdapter == null) return;
+
+        List<Note> reloadedNotes = NotesStorage.loadNotes(getContext());
+        notes.clear();
+        notes.addAll(reloadedNotes);
+        sortAndRefreshNotes();
+        NotesStorage.saveNotes(getContext(), notes);
     }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        NotesStorage.saveNotes(getContext(), notes);
+        loadAndRefreshNotes();
+    }
+
+    @Override
+    public void onHiddenChanged(boolean hidden) {
+        super.onHiddenChanged(hidden);
+        if (!hidden) {
+            loadAndRefreshNotes();
+        }
+    }
+
 }

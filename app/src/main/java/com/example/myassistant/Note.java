@@ -45,6 +45,10 @@ public class Note implements Serializable {
         return lastModified;
     }
 
+    public void setLastModified(long lastModified) {
+        this.lastModified = lastModified;
+    }
+
     public boolean isPinned() {
         return pinned;
     }
