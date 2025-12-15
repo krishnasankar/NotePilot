@@ -12,6 +12,7 @@
         android:layout_height="wrap_content"
         android:background="@drawable/chat_bubble_background"
         android:padding="12dp"
-        android:textColor="@android:color/white" />
+        android:textColor="@android:color/white"
+        android:textIsSelectable="true" />
 
 </LinearLayout>
