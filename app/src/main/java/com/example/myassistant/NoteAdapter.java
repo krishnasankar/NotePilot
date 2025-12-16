@@ -53,31 +53,44 @@ public class NoteAdapter extends ListAdapter<Note, NoteAdapter.NoteViewHolder> {
         return new NoteViewHolder(view);
     }
 
-    @Override
-    public void onBindViewHolder(@NonNull NoteViewHolder holder, int position) {
-        Note note = getItem(position);
-        holder.bind(note, listener);
+@Override
+public void onBindViewHolder(@NonNull NoteViewHolder holder, int position) {
+    Note note = getItem(position);
+    holder.bind(note, listener);
 
-        String displayTitle = !TextUtils.isEmpty(note.getTitle())
+    String displayText;
+    if (note.isChecklist()) {
+        StringBuilder sb = new StringBuilder();
+        if (!TextUtils.isEmpty(note.getTitle())) {
+            sb.append(note.getTitle()).append("\n");
+        }
+        for (ChecklistItem item : note.getChecklist()) {
+            sb.append(item.checked ? "✓ " : "- ").append(item.text).append("\n");
+        }
+        displayText = sb.toString().trim();
+    } else {
+        displayText = !TextUtils.isEmpty(note.getTitle())
                 ? note.getTitle()
                 : note.getContent();
-        holder.textViewNoteTitle.setText(displayTitle);
-        holder.itemView.setBackgroundColor(note.getColor());
-
-        holder.buttonPinNote.setImageResource(note.isPinned() ? R.drawable.ic_pin_on : R.drawable.ic_pin_off);
-
-        holder.buttonPinNote.setOnClickListener(v -> {
-            if (holder.getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
-                listener.onPinClick(note, holder.getBindingAdapterPosition());
-            }
-        });
-
-        holder.buttonDeleteNote.setOnClickListener(v -> {
-            if (holder.getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
-                showDeleteConfirmationDialog(note, holder.getBindingAdapterPosition());
-            }
-        });
     }
+    holder.textViewNoteTitle.setText(displayText);
+    holder.textViewNoteTitle.setMaxLines(note.isChecklist() ? Integer.MAX_VALUE : 2);
+    holder.itemView.setBackgroundColor(note.getColor());
+
+    holder.buttonPinNote.setImageResource(note.isPinned() ? R.drawable.ic_pin_on : R.drawable.ic_pin_off);
+
+    holder.buttonPinNote.setOnClickListener(v -> {
+        if (holder.getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
+            listener.onPinClick(note, holder.getBindingAdapterPosition());
+        }
+    });
+
+    holder.buttonDeleteNote.setOnClickListener(v -> {
+        if (holder.getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
+            showDeleteConfirmationDialog(note, holder.getBindingAdapterPosition());
+        }
+    });
+}
 
     private void showDeleteConfirmationDialog(Note note, int position) {
         final Dialog dialog = new Dialog(context);

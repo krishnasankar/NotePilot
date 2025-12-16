@@ -208,7 +208,14 @@ public class ChatFragment extends Fragment {
                 boolean hasTitle = note.getTitle() != null && !note.getTitle().trim().isEmpty();
                 notesContent.append("--- Start of Note ---\n");
                 notesContent.append("Title: ").append(hasTitle ? note.getTitle(): "No Title").append("\n");
-                if (note.getContent() != null && !note.getContent().trim().isEmpty()) {
+                if (note.isChecklist()) {
+                    notesContent.append("Type: Checklist\n");
+                    notesContent.append("Items:\n");
+                    for (ChecklistItem item : note.getChecklist()) {
+                        notesContent.append("- ").append(item.text).append(" (").append(item.checked ? "checked" : "unchecked").append(")\n");
+                    }
+                } else if (note.getContent() != null && !note.getContent().trim().isEmpty()) {
+                    notesContent.append("Type: Text\n");
                     notesContent.append("Content:\n").append(note.getContent()).append("\n");
                 }
                 notesContent.append("--- End of Note ---\n\n");
