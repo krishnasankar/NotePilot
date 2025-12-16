@@ -43,7 +43,6 @@ dependencies {
     implementation libs.gson
     implementation "io.noties.markwon:core:4.6.2"
     implementation "io.noties.markwon:inline-parser:4.6.2"
-    implementation 'jp.wasabeef:richeditor-android:2.0.0'
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core

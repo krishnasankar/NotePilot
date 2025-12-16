@@ -20,9 +20,6 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.button.MaterialButton;
-import jp.wasabeef.richeditor.RichEditor;
-import androidx.core.content.ContextCompat;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +27,7 @@ import java.util.List;
 public class NoteDetailActivity extends AppCompatActivity {
 
     private EditText editTextNoteTitle;
-    private RichEditor richEditor;
+    private EditText editTextNoteContent;
     private Note note;
     private boolean isNewNote;
     private Note originalNote;
@@ -48,31 +45,8 @@ public class NoteDetailActivity extends AppCompatActivity {
         });
 
         editTextNoteTitle = findViewById(R.id.editTextNoteTitle);
-        richEditor = findViewById(R.id.richEditor);
+        editTextNoteContent = findViewById(R.id.editTextNoteContent);
         FloatingActionButton fabDeleteNote = findViewById(R.id.fabDeleteNote);
-
-        // Configure Rich Editor
-        richEditor.setPlaceholder("Content");
-        richEditor.setEditorFontColor(ContextCompat.getColor(this, R.color.textColorPrimary));
-        richEditor.setEditorFontSize(16);
-        richEditor.setPadding(0, 8, 0, 0);
-
-        // Toolbar actions
-        findViewById(R.id.btnUndo).setOnClickListener(v -> richEditor.undo());
-        findViewById(R.id.btnRedo).setOnClickListener(v -> richEditor.redo());
-        findViewById(R.id.btnBold).setOnClickListener(v -> richEditor.setBold());
-        findViewById(R.id.btnItalic).setOnClickListener(v -> richEditor.setItalic());
-        findViewById(R.id.btnUnderline).setOnClickListener(v -> richEditor.setUnderline());
-        findViewById(R.id.btnStrike).setOnClickListener(v -> richEditor.setStrikeThrough());
-        findViewById(R.id.btnH1).setOnClickListener(v -> richEditor.setHeading(1));
-        findViewById(R.id.btnH2).setOnClickListener(v -> richEditor.setHeading(2));
-        findViewById(R.id.btnBullets).setOnClickListener(v -> richEditor.setBullets());
-        findViewById(R.id.btnNumbers).setOnClickListener(v -> richEditor.setNumbers());
-        findViewById(R.id.btnQuote).setOnClickListener(v -> richEditor.setBlockquote());
-        findViewById(R.id.btnLink).setOnClickListener(v -> {
-            // Simple default link insertion; could be replaced by a dialog for URL/text
-            richEditor.insertLink("https://", "link");
-        });
 
         note = (Note) getIntent().getSerializableExtra("note");
         int notePosition = getIntent().getIntExtra("notePosition", -1);
@@ -81,17 +55,20 @@ public class NoteDetailActivity extends AppCompatActivity {
         if (note != null) {
             originalNote = new Note(note); // Make a copy for comparison
             editTextNoteTitle.setText(note.getTitle());
-            richEditor.setHtml(note.getContent());
+            editTextNoteContent.setText(note.getContent());
 
             if (isNewNote) {
                 // New note: focus on content and show keyboard
-                richEditor.focusEditor();
+                editTextNoteContent.requestFocus();
                 new Handler().postDelayed(() -> {
                     InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                    imm.showSoftInput(richEditor, InputMethodManager.SHOW_IMPLICIT);
+                    imm.showSoftInput(editTextNoteContent, InputMethodManager.SHOW_IMPLICIT);
                 }, 100);
             } else {
-                // Existing note: optionally focus editor
+                // Existing note: move cursor to the end of content
+                if (!TextUtils.isEmpty(note.getContent())) {
+                    editTextNoteContent.setSelection(note.getContent().length());
+                }
             }
         }
 
@@ -109,8 +86,7 @@ public class NoteDetailActivity extends AppCompatActivity {
 
     private void saveNote() {
         String title = editTextNoteTitle.getText().toString();
-        String content = richEditor.getHtml();
-        if (content == null) content = "";
+        String content = editTextNoteContent.getText().toString();
 
         if (isNewNote && TextUtils.isEmpty(title) && TextUtils.isEmpty(content)) {
             setResult(Activity.RESULT_CANCELED);
