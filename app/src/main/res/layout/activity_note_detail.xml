@@ -87,6 +87,7 @@
         android:layout_margin="16dp"
         android:src="@drawable/ic_add_24"
         android:contentDescription="Add Item"
+        app:backgroundTint="@android:color/transparent"
         android:visibility="gone" />
 
 </RelativeLayout>

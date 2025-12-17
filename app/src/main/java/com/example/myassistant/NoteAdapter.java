@@ -59,22 +59,25 @@ public void onBindViewHolder(@NonNull NoteViewHolder holder, int position) {
     holder.bind(note, listener);
 
     String displayText;
-    if (note.isChecklist()) {
-        StringBuilder sb = new StringBuilder();
-        if (!TextUtils.isEmpty(note.getTitle())) {
-            sb.append(note.getTitle()).append("\n");
+    if (!TextUtils.isEmpty(note.getTitle())) {
+        displayText = note.getTitle();
+    } else if (note.isChecklist()) {
+        if (note.getChecklist() != null && !note.getChecklist().isEmpty()) {
+            displayText = note.getChecklist().get(0).text;
+        } else {
+            displayText = "";
         }
-        for (ChecklistItem item : note.getChecklist()) {
-            sb.append(item.checked ? "✓ " : "- ").append(item.text).append("\n");
-        }
-        displayText = sb.toString().trim();
     } else {
-        displayText = !TextUtils.isEmpty(note.getTitle())
-                ? note.getTitle()
-                : note.getContent();
+        String content = note.getContent();
+        if (!TextUtils.isEmpty(content)) {
+            int idx = content.indexOf('\n');
+            displayText = idx >= 0 ? content.substring(0, idx) : content;
+        } else {
+            displayText = "";
+        }
     }
     holder.textViewNoteTitle.setText(displayText);
-    holder.textViewNoteTitle.setMaxLines(note.isChecklist() ? Integer.MAX_VALUE : 2);
+    holder.textViewNoteTitle.setMaxLines(2);
     holder.itemView.setBackgroundColor(note.getColor());
 
     holder.buttonPinNote.setImageResource(note.isPinned() ? R.drawable.ic_pin_on : R.drawable.ic_pin_off);

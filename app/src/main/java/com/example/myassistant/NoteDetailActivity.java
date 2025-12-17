@@ -18,6 +18,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import android.view.WindowManager;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
@@ -44,11 +45,17 @@ private ChecklistAdapter checklistAdapter;
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_note_detail);
+        
+        // Ensure the window resizes when the IME (keyboard) shows
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         View root = findViewById(android.R.id.content);
         ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
-            int statusBarHeight = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
-            v.setPadding(v.getPaddingLeft(), statusBarHeight, v.getPaddingRight(), v.getPaddingBottom());
+            int top = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
+            int bottomIme = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+            int bottomNav = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
+            int bottom = Math.max(bottomIme, bottomNav);
+            v.setPadding(v.getPaddingLeft(), top, v.getPaddingRight(), bottom);
             return windowInsets;
         });
 
