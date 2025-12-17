@@ -27,6 +27,11 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import android.app.Dialog;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.view.Window;
+import android.widget.Button;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
@@ -42,6 +47,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.util.LinkedHashSet;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -87,8 +93,31 @@ public class ChatFragment extends Fragment {
         buttonSend = view.findViewById(R.id.buttonSend);
         progressBar = view.findViewById(R.id.progressBar);
         chatRecyclerView = view.findViewById(R.id.chat_recycler_view);
-        ImageButton buttonClearInput = view.findViewById(R.id.buttonClearInput);
+ImageButton buttonClearInput = view.findViewById(R.id.buttonClearInput);
         buttonClearInput.setOnClickListener(v -> editTextPrompt.setText(""));
+        ImageButton buttonClearContext = view.findViewById(R.id.buttonClearContext);
+        buttonClearContext.setOnClickListener(v2 -> {
+            if (progressBar != null && progressBar.getVisibility() == View.VISIBLE) {
+                Toast.makeText(getContext(), "Please wait for the current request to finish", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            Dialog dialog = new Dialog(requireContext());
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+            dialog.setContentView(R.layout.dialog_clear_context);
+            Button buttonCancel = dialog.findViewById(R.id.buttonCancel);
+            Button buttonClear = dialog.findViewById(R.id.buttonClear);
+            buttonCancel.setOnClickListener(v -> dialog.dismiss());
+            buttonClear.setOnClickListener(v -> {
+                chatHistory.clear();
+                chatAdapter.notifyDataSetChanged();
+                Toast.makeText(getContext(), "Chat context cleared", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            });
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            }
+            dialog.show();
+        });
 
         editTextPrompt.addTextChangedListener(new TextWatcher() {
             @Override
@@ -142,24 +171,19 @@ public class ChatFragment extends Fragment {
         chatRecyclerView.scrollToPosition(chatHistory.size() - 1);
     }
 
-    private boolean addOrUpdateNote(String title, String content) {
-        if (getContext() == null || TextUtils.isEmpty(title)) return false;
+private boolean addOrUpdateNote(String title, String content) {
+        if (getContext() == null) return false;
+        if (title != null) title = title.trim();
+        if (content != null) content = content.trim();
+        if (TextUtils.isEmpty(title) || TextUtils.isEmpty(content)) return false;
+
         List<Note> notes = NotesStorage.loadNotes(getContext());
         boolean noteExists = false;
         for (Note note : notes) {
             if (title.equalsIgnoreCase(note.getTitle())) {
                 String existingContent = note.getContent();
-                String newContent;
-                if (existingContent != null && !existingContent.isEmpty()) {
-                    if(content.contains(existingContent)) {
-                        newContent = content;
-                    } else {
-                        newContent = existingContent + "\n" + content;
-                    }
-                } else {
-                    newContent = content;
-                }
-                note.setContent(newContent);
+                String merged = mergeNoteContent(existingContent == null ? "" : existingContent, content);
+                note.setContent(merged);
                 noteExists = true;
                 break;
             }
@@ -171,6 +195,60 @@ public class ChatFragment extends Fragment {
         }
         NotesStorage.saveNotes(getContext(), notes);
         return !noteExists;
+    }
+
+    private String mergeNoteContent(String existing, String incoming) {
+        String existingNorm = normalizeForCompare(existing);
+        String incomingNorm = normalizeForCompare(incoming);
+
+        if (existingNorm.isEmpty()) return incoming.trim();
+        if (incomingNorm.isEmpty()) return existing;
+
+        if (existingNorm.equals(incomingNorm)) {
+            return existing;
+        }
+        if (existingNorm.contains(incomingNorm)) {
+            return existing;
+        }
+        if (incomingNorm.contains(existingNorm)) {
+            return incoming.trim();
+        }
+
+        // Merge by unique lines, preserving order
+        LinkedHashSet<String> normalizedSeen = new LinkedHashSet<>();
+        LinkedHashSet<String> mergedLines = new LinkedHashSet<>();
+
+        for (String line : existing.split("\\R")) {
+            String t = line.trim();
+            if (t.isEmpty()) continue;
+            String key = normalizeForCompare(t);
+            if (normalizedSeen.add(key)) {
+                mergedLines.add(t);
+            }
+        }
+        for (String line : incoming.split("\\R")) {
+            String t = line.trim();
+            if (t.isEmpty()) continue;
+            String key = normalizeForCompare(t);
+            if (normalizedSeen.add(key)) {
+                mergedLines.add(t);
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String l : mergedLines) {
+            if (sb.length() > 0) sb.append("\n");
+            sb.append(l);
+        }
+        return sb.toString();
+    }
+
+    private String normalizeForCompare(String s) {
+        if (s == null) return "";
+        String out = s.replaceAll("[\\s\\u00A0]+", " ").trim(); // collapse whitespace including NBSP
+        out = out.replaceAll("[\\p{Z}]+", " ");
+        out = out.replaceAll("\\s*([,.;:!?])\\s*", "$1"); // normalize spaces around punctuation
+        out = out.toLowerCase(Locale.getDefault());
+        return out;
     }
 
     private void setLoading(boolean loading) {
@@ -228,33 +306,45 @@ public class ChatFragment extends Fragment {
         }
         JSONObject jsonBody = new JSONObject();
         try {
-            jsonBody.put("model", "arcee-ai/trinity-mini:free");
-            jsonBody.put("temperature", 1.0);
+jsonBody.put("model", "arcee-ai/trinity-mini:free");
+            jsonBody.put("temperature", 0.3);
             jsonBody.put("max_tokens", 4096);
             JSONArray tools = new JSONArray();
             JSONObject noteTool = new JSONObject();
             noteTool.put("type", "function");
             JSONObject function = new JSONObject();
             function.put("name", "addOrUpdateNote");
-            function.put("description", "Add new content to a note. If a note with the given title exists, the new content will be appended to it. If it doesn't exist, a new note will be created with the given title and content.");
+function.put("description", "Add or update a note ONLY when the user explicitly asks to add/create/edit/append/update a note, reminder, task, or birthday. Do not use this for summarization, explanation, or Q&A. Avoid duplicating existing content; append only new unique items.");
             JSONObject parameters = new JSONObject();
             parameters.put("type", "object");
             JSONObject properties = new JSONObject();
             properties.put("title", new JSONObject().put("type", "string").put("description", "The title of the note. If the user asks to add a reminder, task, or birthday, this should be 'Reminders', 'Tasks', or 'Birthdays' respectively."));
             properties.put("content", new JSONObject().put("type", "string").put("description", "The content to be added to the note. This will be appended if the note already exists."));
-            parameters.put("properties", properties);
+parameters.put("properties", properties);
+            parameters.put("required", new JSONArray().put("title").put("content"));
             function.put("parameters", parameters);
             noteTool.put("function", function);
 
             tools.put(noteTool);
-            jsonBody.put("tools", tools);
+jsonBody.put("tools", tools);
+            jsonBody.put("tool_choice", "auto");
             JSONArray messagesArray = new JSONArray();
             JSONObject systemMsg = new JSONObject();
             systemMsg.put("role", "system");
-            systemMsg.put("content", "You are a helpful personal assistant. Your primary role is to assist the user with their notes.\n\n" +
-"When the user asks a question, use the content of their notes, provided below, to give a comprehensive answer. Announce that you are using the notes in your response.\n\n" +
-"When the user asks you to add or update a note, you must use the 'addOrUpdateNote' function. Be intelligent about whether to append to an existing note or create a new one based on the title.\n\n" +
-"Here are the user's notes:\n" + notes + "\n\n" + contextSnippet);
+systemMsg.put("content", "You are a helpful personal assistant for notes.\n\n" +
+                    "Capabilities:\n" +
+                    "- You can freely read, summarize, analyze, compare, extract, and plan using the user's notes below.\n" +
+                    "- You can answer questions directly from the notes without using any tools.\n\n" +
+                    "Tool usage policy (strict):\n" +
+                    "- Only call the 'addOrUpdateNote' function when the user explicitly asks to add, create, edit, append, update, or modify a note, reminder, task, or birthday.\n" +
+                    "- Never call tools for summarization, explanation, Q&A, brainstorming, or planning.\n" +
+                    "- Do not claim that you cannot summarize or answer; you can and should answer directly using the notes context.\n" +
+                    "- If the user both requests an update and also asks for an answer/summary, call the tool to update and also provide the requested answer in your normal assistant message.\n" +
+                    "- When proposing content to append, avoid duplicating what's already in the note; only include new unique items.\n\n" +
+                    "Response style:\n" +
+                    "- When answering, explicitly mention that you used the notes.\n" +
+                    "- If the relevant information is missing from notes, state that briefly and, if appropriate, ask a concise follow-up.\n\n" +
+                    "Here are the user's notes:\n" + notes + "\n\n" + contextSnippet);
             messagesArray.put(systemMsg);
 
 
@@ -265,10 +355,6 @@ public class ChatFragment extends Fragment {
                 messagesArray.put(chatMessage);
             }
 
-            JSONObject userMessage = new JSONObject();
-            userMessage.put("role", "user");
-            userMessage.put("content", prompt);
-            messagesArray.put(userMessage);
 
             jsonBody.put("messages", messagesArray);
         } catch (JSONException e) {
@@ -325,14 +411,17 @@ public class ChatFragment extends Fragment {
                         JSONObject choice = choices.getJSONObject(0);
                         JSONObject message = choice.optJSONObject("message");
                         if (message != null) {
-                            if (message.has("tool_calls")) {
+                        if (message.has("tool_calls")) {
                                 JSONArray toolCalls = message.getJSONArray("tool_calls");
+                                boolean executedUpdate = false;
                                 for (int i = 0; i < toolCalls.length(); i++) {
                                     JSONObject toolCall = toolCalls.getJSONObject(i);
                                     if ("function".equals(toolCall.getString("type"))) {
                                         JSONObject functionCall = toolCall.getJSONObject("function");
                                         String functionName = functionCall.getString("name");
                                         if ("addOrUpdateNote".equals(functionName)) {
+                                            if (executedUpdate) continue;
+                                            executedUpdate = true;
                                             JSONObject arguments = new JSONObject(functionCall.getString("arguments"));
                                             final String title = arguments.optString("title", null);
                                             final String content = arguments.optString("content", null);
