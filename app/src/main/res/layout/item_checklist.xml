@@ -17,6 +17,7 @@
         android:layout_height="wrap_content"
         android:hint="Item"
         android:inputType="textCapSentences"
+        android:imeOptions="actionDone"
         android:background="@android:color/transparent"
         android:textColor="@color/textColorPrimary"
         android:textColorHint="@color/textColorSecondary" />
