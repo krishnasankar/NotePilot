@@ -2,11 +2,13 @@ package com.example.myassistant;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.speech.RecognizerIntent;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -93,7 +95,8 @@ public class ChatFragment extends Fragment {
         buttonSend = view.findViewById(R.id.buttonSend);
         progressBar = view.findViewById(R.id.progressBar);
         chatRecyclerView = view.findViewById(R.id.chat_recycler_view);
-ImageButton buttonClearInput = view.findViewById(R.id.buttonClearInput);
+        ImageButton buttonClearInput = view.findViewById(R.id.buttonClearInput);
+        ImageButton buttonVoice = view.findViewById(R.id.buttonVoice);
         buttonClearInput.setOnClickListener(v -> editTextPrompt.setText(""));
         ImageButton buttonClearContext = view.findViewById(R.id.buttonClearContext);
         buttonClearContext.setOnClickListener(v2 -> {
@@ -150,6 +153,19 @@ ImageButton buttonClearInput = view.findViewById(R.id.buttonClearInput);
             editTextPrompt.setText("");
             addToChatHistory(new ChatMessage(prompt, ChatMessage.Author.USER));
             callOpenRouterWithNotes(prompt);
+        });
+
+        buttonVoice.setOnClickListener(v -> {
+            if (getContext() == null) return;
+            if (!android.speech.SpeechRecognizer.isRecognitionAvailable(getContext())) {
+                Toast.makeText(getContext(), "Speech recognition is not available on this device", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
+            } else {
+                startSpeechRecognition();
+            }
         });
 
         // Request focus and show keyboard
@@ -514,6 +530,27 @@ systemMsg.put("content", "You are a helpful personal assistant for notes.\n\n" +
                 }
             });
 
+    private final ActivityResultLauncher<String> audioPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted) {
+                    startSpeechRecognition();
+                } else {
+                    Toast.makeText(getContext(), "Audio permission is required for voice input", Toast.LENGTH_SHORT).show();
+                }
+            });
+
+    private final ActivityResultLauncher<Intent> speechRecognitionLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == android.app.Activity.RESULT_OK && result.getData() != null) {
+                    ArrayList<String> matches = result.getData().getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                    if (matches != null && !matches.isEmpty()) {
+                        String spokenText = matches.get(0);
+                        editTextPrompt.setText(spokenText);
+                        editTextPrompt.setSelection(spokenText.length());
+                    }
+                }
+            });
+
     private void requestLocationPermissionsIfNeeded() {
         if (getContext() == null) return;
         boolean fine = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
@@ -574,5 +611,17 @@ systemMsg.put("content", "You are a helpful personal assistant for notes.\n\n" +
         return String.format(Locale.getDefault(),
                 "local_time=%s, timezone=%s (%s), locale=%s",
                 localTime, tz, tzDisplay, locale);
+    }
+
+    private void startSpeechRecognition() {
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your message");
+        try {
+            speechRecognitionLauncher.launch(intent);
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "Speech recognition failed to start", Toast.LENGTH_SHORT).show();
+        }
     }
 }
