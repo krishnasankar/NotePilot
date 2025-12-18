@@ -7,6 +7,7 @@ import com.google.gson.reflect.TypeToken;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.io.IOException;
@@ -21,30 +22,21 @@ public class NotesStorage {
     public static boolean saveNotes(Context context, List<Note> notes) {
         Gson gson = new Gson();
         String json = gson.toJson(notes);
-        FileOutputStream fos = null;
-        try {
-            fos = context.openFileOutput(NOTES_FILE_NAME, Context.MODE_PRIVATE);
+        try (FileOutputStream fos = context.openFileOutput(NOTES_FILE_NAME, Context.MODE_PRIVATE)) {
             fos.write(json.getBytes());
             fos.flush();
             return true;
         } catch (IOException e) {
             e.printStackTrace();
             return false;
-        } finally {
-            if (fos != null) {
-                try { fos.close(); } catch (IOException ignored) {}
-            }
         }
     }
 
     public static List<Note> loadNotes(Context context) {
-        List<Note> notes = new ArrayList<>();
-        FileInputStream fis = null;
-        BufferedReader reader = null;
+        try (FileInputStream fis = context.openFileInput(NOTES_FILE_NAME);
+             InputStreamReader isr = new InputStreamReader(fis);
+             BufferedReader reader = new BufferedReader(isr)) {
 
-        try {
-            fis = context.openFileInput(NOTES_FILE_NAME);
-            reader = new BufferedReader(new InputStreamReader(fis));
             StringBuilder builder = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {
@@ -52,16 +44,16 @@ public class NotesStorage {
             }
             Gson gson = new Gson();
             Type type = new TypeToken<ArrayList<Note>>() {}.getType();
-            notes = gson.fromJson(builder.toString(), type);
+            List<Note> notes = gson.fromJson(builder.toString(), type);
+            if (notes != null) {
+                return notes;
+            }
+        } catch (FileNotFoundException e) {
+            // This is normal on the first run when the file doesn't exist yet.
         } catch (IOException e) {
-            // no file yet - first run
-        } finally {
-            try {
-                if (reader != null) reader.close();
-                if (fis != null) fis.close();
-            } catch (IOException ignored) {}
+            e.printStackTrace();
         }
-
-        return notes;
+        // Return an empty list if the file doesn't exist, is empty, or an error occurred.
+        return new ArrayList<>();
     }
 }

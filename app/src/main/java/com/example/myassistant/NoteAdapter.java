@@ -1,39 +1,50 @@
 package com.example.myassistant;
 
-import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
-import java.util.List;
 
-public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder> {
+public class NoteAdapter extends ListAdapter<Note, NoteAdapter.NoteViewHolder> {
 
-    private final List<Note> notes;
     private final Context context;
     private final OnNoteClickListener listener;
 
     public interface OnNoteClickListener {
         void onNoteClick(Note note, int position);
         void onPinClick(Note note, int position);
+        void onDeleteClick(Note note, int position);
     }
 
-    public NoteAdapter(List<Note> notes, Context context, OnNoteClickListener listener) {
-        this.notes = notes;
+    public NoteAdapter(Context context, OnNoteClickListener listener) {
+        super(DIFF_CALLBACK);
         this.context = context;
         this.listener = listener;
-        setHasStableIds(true);
     }
 
-    @Override
-    public long getItemId(int position) {
-        return notes.get(position).hashCode();
-    }
+    private static final DiffUtil.ItemCallback<Note> DIFF_CALLBACK = new DiffUtil.ItemCallback<Note>() {
+        @Override
+        public boolean areItemsTheSame(@NonNull Note oldItem, @NonNull Note newItem) {
+            return oldItem.getId() == newItem.getId();
+        }
+
+        @Override
+        public boolean areContentsTheSame(@NonNull Note oldItem, @NonNull Note newItem) {
+            return oldItem.equals(newItem);
+        }
+    };
 
     @NonNull
     @Override
@@ -42,48 +53,66 @@ public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder
         return new NoteViewHolder(view);
     }
 
-    @Override
-    public void onBindViewHolder(@NonNull NoteViewHolder holder, int position) {
-        Note note = notes.get(position);
-        holder.bind(note, listener);
+@Override
+public void onBindViewHolder(@NonNull NoteViewHolder holder, int position) {
+    Note note = getItem(position);
+    holder.bind(note, listener);
 
-        String displayTitle = !TextUtils.isEmpty(note.getTitle())
-                ? note.getTitle()
-                : getFirstLine(note.getContent());
-        holder.textViewNoteTitle.setText(displayTitle);
-        holder.itemView.setBackgroundColor(note.getColor());
+    String displayText;
+    if (!TextUtils.isEmpty(note.getTitle())) {
+        displayText = note.getTitle();
+    } else if (note.isChecklist()) {
+        if (note.getChecklist() != null && !note.getChecklist().isEmpty()) {
+            displayText = note.getChecklist().get(0).text;
+        } else {
+            displayText = "";
+        }
+    } else {
+        String content = note.getContent();
+        if (!TextUtils.isEmpty(content)) {
+            int idx = content.indexOf('\n');
+            displayText = idx >= 0 ? content.substring(0, idx) : content;
+        } else {
+            displayText = "";
+        }
+    }
+    holder.textViewNoteTitle.setText(displayText);
+    holder.textViewNoteTitle.setMaxLines(2);
+    holder.itemView.setBackgroundColor(note.getColor());
 
-        holder.buttonPinNote.setImageResource(note.isPinned() ? R.drawable.ic_pin_on : R.drawable.ic_pin_off);
+    holder.buttonPinNote.setImageResource(note.isPinned() ? R.drawable.ic_pin_on : R.drawable.ic_pin_off);
 
-        holder.buttonPinNote.setOnClickListener(v -> {
-            listener.onPinClick(note, holder.getAdapterPosition());
+    holder.buttonPinNote.setOnClickListener(v -> {
+        if (holder.getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
+            listener.onPinClick(note, holder.getBindingAdapterPosition());
+        }
+    });
+
+    holder.buttonDeleteNote.setOnClickListener(v -> {
+        if (holder.getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
+            showDeleteConfirmationDialog(note, holder.getBindingAdapterPosition());
+        }
+    });
+}
+
+    private void showDeleteConfirmationDialog(Note note, int position) {
+        final Dialog dialog = new Dialog(context);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_delete_note);
+
+        Button buttonCancel = dialog.findViewById(R.id.buttonCancel);
+        Button buttonDelete = dialog.findViewById(R.id.buttonDelete);
+
+        buttonCancel.setOnClickListener(v -> dialog.dismiss());
+        buttonDelete.setOnClickListener(v -> {
+            if (position != RecyclerView.NO_POSITION) {
+                listener.onDeleteClick(note, position);
+            }
+            dialog.dismiss();
         });
 
-        holder.buttonDeleteNote.setOnClickListener(v -> new AlertDialog.Builder(context)
-                .setTitle("Delete Note")
-                .setMessage("Are you sure you want to delete this note?")
-                .setPositiveButton("Delete", (dialog, which) -> {
-                    int currentPosition = holder.getAdapterPosition();
-                    if (currentPosition != RecyclerView.NO_POSITION) {
-                        notes.remove(currentPosition);
-                        notifyItemRemoved(currentPosition);
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show());
-    }
-
-    @Override
-    public int getItemCount() {
-        return notes.size();
-    }
-
-    private String getFirstLine(String text) {
-        if (TextUtils.isEmpty(text)) {
-            return "";
-        }
-        int firstNewLine = text.indexOf('\n');
-        return firstNewLine == -1 ? text : text.substring(0, firstNewLine);
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dialog.show();
     }
 
     static class NoteViewHolder extends RecyclerView.ViewHolder {
@@ -99,7 +128,11 @@ public class NoteAdapter extends RecyclerView.Adapter<NoteAdapter.NoteViewHolder
         }
 
         public void bind(final Note note, final OnNoteClickListener listener) {
-            itemView.setOnClickListener(v -> listener.onNoteClick(note, getAdapterPosition()));
+            itemView.setOnClickListener(v -> {
+                if (getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
+                    listener.onNoteClick(note, getBindingAdapterPosition());
+                }
+            });
         }
     }
 }

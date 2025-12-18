@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_main_gradient"
-    android:padding="16dp">
+    android:fitsSystemWindows="true">
 
     <!-- App title -->
     <TextView
@@ -14,24 +14,26 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="NotePilot"
-        android:textSize="28sp"
+        android:textSize="22sp"
         android:textStyle="bold"
         android:textColor="@android:color/white"
         android:letterSpacing="0.08"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp" />
 
     <!-- Subtitle -->
     <TextView
         android:id="@+id/textSubtitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Ask questions powered by your notes"
-        android:textSize="14sp"
+        android:text="The chat assistant powered by your notes"
+        android:textSize="12sp"
         android:textColor="#E0FFFFFF"
-        app:layout_constraintTop_toBottomOf="@id/textTitle"
+        app:layout_constraintTop_toBottomOf="@+id/textTitle"
         app:layout_constraintStart_toStartOf="@id/textTitle"
-        android:layout_marginTop="4dp" />
+        android:layout_marginTop="2dp" />
 
     <ImageButton
         android:id="@+id/buttonSettings"
@@ -39,12 +41,13 @@
         android:layout_height="36dp"
         android:background="@android:color/transparent"
         app:srcCompat="@drawable/ic_baseline_settings_24"
-    android:contentDescription="Settings"
-    android:tint="@android:color/white"
-    app:layout_constraintTop_toTopOf="parent"
-    app:layout_constraintEnd_toEndOf="parent"
-    android:layout_marginTop="8dp"
-    android:layout_marginEnd="8dp" />
+        android:contentDescription="Settings"
+        android:tint="@android:color/white"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp" />
+
     <!-- Key status dot (small badge) -->
     <View
         android:id="@+id/keyStatusDot"
@@ -52,155 +55,28 @@
         android:layout_height="10dp"
         android:background="@drawable/circle_dot"
         android:visibility="visible"
-        app:layout_constraintTop_toTopOf="@id/buttonSettings"
-        app:layout_constraintEnd_toEndOf="@id/buttonSettings"
+        app:layout_constraintTop_toTopOf="@+id/buttonSettings"
+        app:layout_constraintEnd_toEndOf="@+id/buttonSettings"
         android:layout_marginTop="2dp"
         android:layout_marginEnd="2dp"/>
 
-
-    <!-- Card for input + button -->
-    <LinearLayout
-        android:id="@+id/inputCard"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp"
-        android:background="@drawable/bg_card"
-        android:elevation="4dp"
-        app:layout_constraintTop_toBottomOf="@id/textSubtitle"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="20dp">
-
-        <EditText
-            android:id="@+id/editTextPrompt"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Ask something..."
-            android:background="@android:color/transparent"
-            android:textColor="@android:color/white"
-            android:textColorHint="#B3FFFFFF"
-            android:inputType="textMultiLine"
-            android:minLines="2"
-            android:maxLines="5"
-            android:padding="4dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="8dp">
-
-            <!-- CLEAR BUTTON on the LEFT -->
-            <ImageButton
-                android:id="@+id/buttonClearInput"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:background="@android:color/transparent"
-                android:tint="@android:color/white"
-                android:src="@drawable/ic_delete_24"
-                android:contentDescription="Clear input"
-                android:padding="4dp"
-                android:layout_marginEnd="12dp" />
-
-            <!-- This fills space and pushes Ask button to the right -->
-            <View
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
-            <!-- ProgressBar (optional, appears right before Ask button) -->
-            <ProgressBar
-                android:id="@+id/progressBar"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:visibility="gone"
-                style="?android:attr/progressBarStyleSmall"
-                android:layout_marginEnd="8dp" />
-
-            <!-- ASK BUTTON on the RIGHT -->
-            <Button
-                android:id="@+id/buttonSend"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Ask"
-                android:textAllCaps="false"
-                android:backgroundTint="#FFFFFF"
-                android:textColor="#333333"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp" />
-
-        </LinearLayout>
-
-    </LinearLayout>
-
-    <!-- Response card -->
-    <LinearLayout
-        android:id="@+id/responseCard"
+    <FrameLayout
+        android:id="@+id/fragment_container"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:orientation="vertical"
-        android:padding="12dp"
-        android:background="@drawable/bg_card_translucent"
-        android:elevation="4dp"
-        app:layout_constraintTop_toBottomOf="@id/inputCard"
+        app:layout_constraintTop_toBottomOf="@+id/textSubtitle"
+        app:layout_constraintBottom_toTopOf="@+id/bottom_navigation"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_navigation"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="16dp">
-
-        <!-- Header row with only a clear button aligned to the right -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="end">
-
-            <ImageButton
-                android:id="@+id/buttonCopyResponse"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:background="@android:color/transparent"
-                android:src="@drawable/ic_content_copy_24"
-                android:contentDescription="Copy response"
-                android:tint="@android:color/white"
-                android:visibility="gone" />
-
-        </LinearLayout>
-
-        <ScrollView
-            android:id="@+id/responseScrollView"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:layout_marginTop="4dp"
-            android:clipToPadding="false"
-            android:paddingBottom="@dimen/fab_safe_bottom">
-            <!-- textViewResponse starts empty, filled after first answer -->
-            <TextView
-                android:id="@+id/textViewResponse"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="15sp"
-                android:textColor="#F5F5F5" />
-
-        </ScrollView>
-    </LinearLayout>
-
-    <!-- Minimal circular button for notes (bottom-right) -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabNotes"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:contentDescription="Edit notes"
-        android:src="@android:drawable/ic_menu_edit"
-        app:tint="@android:color/white"
-        app:backgroundTint="#FFB74D"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_margin="16dp"
-        android:layout_marginBottom="16dp"/>
+        android:background="@color/colorPrimary"
+            app:menu="@menu/bottom_nav_menu" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

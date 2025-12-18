@@ -1,92 +1,276 @@
 package com.example.myassistant;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.TextUtils;
+import android.view.View;
+import android.view.Window;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
 import android.widget.EditText;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
-import android.view.View;
+import android.view.WindowManager;
+
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 public class NoteDetailActivity extends AppCompatActivity {
 
-    private EditText editTextNoteTitle;
-    private EditText editTextNoteContent;
-    private Note note;
-    private boolean isNewNote;
+private EditText editTextNoteTitle;
+private EditText editTextNoteContent;
+private Note note;
+private boolean isNewNote;
+private Note originalNote;
+
+private com.google.android.material.floatingactionbutton.FloatingActionButton fabToggleChecklist;
+private RecyclerView recyclerViewChecklist;
+private ChecklistAdapter checklistAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_note_detail);
+        
+        // Ensure the window resizes when the IME (keyboard) shows
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         View root = findViewById(android.R.id.content);
         ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
-            int statusBarHeight = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
-            v.setPadding(v.getPaddingLeft(), statusBarHeight, v.getPaddingRight(), v.getPaddingBottom());
+            int top = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
+            int bottomIme = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
+            int bottomNav = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
+            int bottom = Math.max(bottomIme, bottomNav);
+            v.setPadding(v.getPaddingLeft(), top, v.getPaddingRight(), bottom);
             return windowInsets;
         });
 
-        editTextNoteTitle = findViewById(R.id.editTextNoteTitle);
-        editTextNoteContent = findViewById(R.id.editTextNoteContent);
+editTextNoteTitle = findViewById(R.id.editTextNoteTitle);
+editTextNoteContent = findViewById(R.id.editTextNoteContent);
+FloatingActionButton fabDeleteNote = findViewById(R.id.fabDeleteNote);
+fabToggleChecklist = findViewById(R.id.fabToggleChecklist);
+recyclerViewChecklist = findViewById(R.id.recyclerViewChecklist);
 
         note = (Note) getIntent().getSerializableExtra("note");
-        isNewNote = getIntent().getIntExtra("notePosition", -1) == -1;
+        int notePosition = getIntent().getIntExtra("notePosition", -1);
+        isNewNote = notePosition == -1;
 
-        if (note != null) {
-            editTextNoteTitle.setText(note.getTitle());
+    if (note != null) {
+        originalNote = new Note(note); // Make a copy for comparison
+        editTextNoteTitle.setText(note.getTitle());
+        if (note.isChecklist()) {
+            checklistAdapter = new ChecklistAdapter(note.getChecklist(), () -> checklistAdapter.addItemAndFocus(new ChecklistItem("", false), recyclerViewChecklist));
+            recyclerViewChecklist.setLayoutManager(new LinearLayoutManager(this));
+            recyclerViewChecklist.setAdapter(checklistAdapter);
+            recyclerViewChecklist.setVisibility(View.VISIBLE);
+            editTextNoteContent.setVisibility(View.GONE);
+            fabToggleChecklist.setImageResource(R.drawable.ic_checkbox_on);
+        } else {
             editTextNoteContent.setText(note.getContent());
+            editTextNoteContent.setVisibility(View.VISIBLE);
+            recyclerViewChecklist.setVisibility(View.GONE);
+            fabToggleChecklist.setImageResource(R.drawable.ic_checkbox_off);
+        }
 
-            if (isNewNote) {
-                // New note: focus on content and show keyboard
-                editTextNoteContent.requestFocus();
-                new Handler().postDelayed(() -> {
-                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                    imm.showSoftInput(editTextNoteContent, InputMethodManager.SHOW_IMPLICIT);
-                }, 100); 
-            } else {
-                // Existing note: move cursor to the end of content
-                if (!TextUtils.isEmpty(note.getContent())) {
-                    editTextNoteContent.setSelection(note.getContent().length());
+        fabToggleChecklist.setOnClickListener(v -> toggleMode());
+
+        if (isNewNote) {
+            // New note: focus on title first
+            editTextNoteTitle.requestFocus();
+            new Handler().postDelayed(() -> {
+                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                imm.showSoftInput(editTextNoteTitle, InputMethodManager.SHOW_IMPLICIT);
+            }, 100);
+
+            // Set up Enter key listener for title to move to content
+            editTextNoteTitle.setOnEditorActionListener((v, actionId, event) -> {
+                if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_NEXT ||
+                    (event != null && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER)) {
+                    if (note.isChecklist()) {
+                        // For checklist, add first item and focus
+                        if (note.getChecklist().isEmpty()) {
+                            checklistAdapter.addItemAndFocus(new ChecklistItem("", false), recyclerViewChecklist);
+                        }
+                    } else {
+                        editTextNoteContent.requestFocus();
+                        editTextNoteContent.setSelection(editTextNoteContent.getText().length());
+                    }
+                    return true;
                 }
+                return false;
+            });
+        } else {
+            // Existing note: move cursor to the end of content
+            if (!note.isChecklist() && !TextUtils.isEmpty(note.getContent())) {
+                editTextNoteContent.setSelection(note.getContent().length());
             }
         }
+    }
+
+fabDeleteNote.setOnClickListener(v -> showDeleteConfirmationDialog());
+
 
         // Handle back press
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
                 saveNote();
-                // Disable the callback to avoid a loop, and trigger the default back action
-                setEnabled(false);
-                getOnBackPressedDispatcher().onBackPressed();
+                finish();
             }
         });
     }
 
-    private void saveNote() {
-        String title = editTextNoteTitle.getText().toString();
+private void saveNote() {
+    String title = editTextNoteTitle.getText().toString();
+
+    if (note.isChecklist()) {
+        // Checklist mode, content is empty or ignored
+        note.setContent("");
+        // checklist is already updated via adapter
+    } else {
         String content = editTextNoteContent.getText().toString();
+        note.setContent(content);
+        note.setChecklist(new ArrayList<>()); // Clear checklist
+    }
+    note.setTitle(title);
 
-        if (TextUtils.isEmpty(title) && TextUtils.isEmpty(content)) {
-            setResult(Activity.RESULT_CANCELED);
-        } else {
-            if (note == null) {
-                note = new Note(title, content, 0); 
+    if (isNewNote && TextUtils.isEmpty(title) && 
+        (note.isChecklist() ? note.getChecklist().isEmpty() : TextUtils.isEmpty(note.getContent()))) {
+        setResult(Activity.RESULT_CANCELED);
+        return;
+    }
+
+    if (!isNewNote && note.equals(originalNote)) {
+        setResult(Activity.RESULT_CANCELED);
+        return;
+    }
+
+    List<Note> notes = NotesStorage.loadNotes(this);
+    if (notes == null) {
+        notes = new ArrayList<>();
+    }
+
+    if (isNewNote) {
+        notes.add(note);
+    } else {
+        boolean found = false;
+        for (int i = 0; i < notes.size(); i++) {
+            if (notes.get(i).getId() == note.getId()) {
+                notes.set(i, note);
+                found = true;
+                break;
             }
-            note.setTitle(title);
-            note.setContent(content);
-
-            Intent resultIntent = new Intent();
-            resultIntent.putExtra("note", note);
-            resultIntent.putExtra("notePosition", getIntent().getIntExtra("notePosition", -1));
-            setResult(Activity.RESULT_OK, resultIntent);
         }
+        if (!found) { // Should not happen with correct logic
+            notes.add(note);
+        }
+    }
+    NotesStorage.saveNotes(this, notes);
+    setResult(Activity.RESULT_OK);
+}
+
+private void toggleMode() {
+    if (note.isChecklist()) {
+        // Switch to text mode
+        StringBuilder sb = new StringBuilder();
+        for (ChecklistItem item : note.getChecklist()) {
+            sb.append(item.text).append("\n");
+        }
+        note.setContent(sb.toString());
+        note.setChecklist(new ArrayList<>());
+        note.setChecklist(false); // set isChecklist false
+        editTextNoteContent.setText(note.getContent());
+        editTextNoteContent.setVisibility(View.VISIBLE);
+        recyclerViewChecklist.setVisibility(View.GONE);
+        fabToggleChecklist.setImageResource(R.drawable.ic_checkbox_off);
+    } else {
+        // Switch to checklist mode
+        String content = editTextNoteContent.getText().toString();
+        List<ChecklistItem> newChecklist = new ArrayList<>();
+        if (!TextUtils.isEmpty(content)) {
+            String[] lines = content.split("\n");
+            for (String line : lines) {
+                if (!line.trim().isEmpty()) {
+                    newChecklist.add(new ChecklistItem(line, false));
+                }
+            }
+        } else {
+            // If content is empty, create first item by default
+            newChecklist.add(new ChecklistItem("", false));
+        }
+        note.setChecklist(newChecklist);
+        note.setContent("");
+        note.setChecklist(true); // set isChecklist true
+        checklistAdapter = new ChecklistAdapter(note.getChecklist(), () -> checklistAdapter.addItemAndFocus(new ChecklistItem("", false), recyclerViewChecklist));
+        recyclerViewChecklist.setLayoutManager(new LinearLayoutManager(this));
+        recyclerViewChecklist.setAdapter(checklistAdapter);
+        recyclerViewChecklist.setVisibility(View.VISIBLE);
+        editTextNoteContent.setVisibility(View.GONE);
+        fabToggleChecklist.setImageResource(R.drawable.ic_checkbox_on);
+
+        // Focus on the first item if checklist was created from empty content
+        if (TextUtils.isEmpty(content)) {
+            recyclerViewChecklist.post(() -> {
+                recyclerViewChecklist.smoothScrollToPosition(1); // Scroll to show the add button
+                recyclerViewChecklist.post(() -> {
+                    RecyclerView.ViewHolder holder = recyclerViewChecklist.findViewHolderForAdapterPosition(0);
+                    if (holder instanceof ChecklistAdapter.ChecklistViewHolder) {
+                        ((ChecklistAdapter.ChecklistViewHolder) holder).editTextItem.requestFocus();
+                        ((ChecklistAdapter.ChecklistViewHolder) holder).editTextItem.setSelection(0);
+                        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                        imm.showSoftInput(((ChecklistAdapter.ChecklistViewHolder) holder).editTextItem, InputMethodManager.SHOW_IMPLICIT);
+                    }
+                });
+            });
+        }
+    }
+}
+
+private void deleteNote() {
+    if (!isNewNote) {
+        List<Note> notes = NotesStorage.loadNotes(this);
+        if (notes != null) {
+            for (int i = 0; i < notes.size(); i++) {
+                if (notes.get(i).getId() == note.getId()) {
+                    notes.remove(i);
+                    break;
+                }
+            }
+            NotesStorage.saveNotes(this, notes);
+        }
+    }
+    setResult(Activity.RESULT_OK);
+}
+
+    private void showDeleteConfirmationDialog() {
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_delete_note);
+
+        Button buttonCancel = dialog.findViewById(R.id.buttonCancel);
+        Button buttonDelete = dialog.findViewById(R.id.buttonDelete);
+
+        buttonCancel.setOnClickListener(v -> dialog.dismiss());
+        buttonDelete.setOnClickListener(v -> {
+            deleteNote();
+            dialog.dismiss();
+            finish();
+        });
+
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dialog.show();
     }
 }
