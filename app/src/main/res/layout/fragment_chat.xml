@@ -75,6 +75,29 @@
                 style="?android:attr/progressBarStyleSmall"
                 android:layout_marginEnd="8dp" />
 
+            <!-- CLEAR CONTEXT BUTTON -->
+            <ImageButton
+                android:id="@+id/buttonClearContext"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@android:color/transparent"
+                android:src="@drawable/ic_baseline_clear_24"
+                app:tint="@android:color/white"
+                android:contentDescription="Clear chat context"
+                android:padding="4dp"
+                android:layout_marginEnd="4dp"/>
+
+            <!-- VOICE INPUT BUTTON -->
+            <ImageButton
+                android:id="@+id/buttonVoice"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@android:color/transparent"
+                android:src="@drawable/ic_microphone"
+                android:contentDescription="Voice input"
+                android:padding="4dp"
+                android:layout_marginEnd="4dp"/>
+
             <!-- ASK BUTTON -->
             <ImageButton
                 android:id="@+id/buttonSend"

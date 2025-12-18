@@ -53,27 +53,47 @@ public class NoteAdapter extends ListAdapter<Note, NoteAdapter.NoteViewHolder> {
         return new NoteViewHolder(view);
     }
 
-    @Override
-    public void onBindViewHolder(@NonNull NoteViewHolder holder, int position) {
-        Note note = getItem(position);
-        holder.bind(note, listener);
+@Override
+public void onBindViewHolder(@NonNull NoteViewHolder holder, int position) {
+    Note note = getItem(position);
+    holder.bind(note, listener);
 
-        String displayTitle = !TextUtils.isEmpty(note.getTitle())
-                ? note.getTitle()
-                : note.getContent();
-        holder.textViewNoteTitle.setText(displayTitle);
-        holder.itemView.setBackgroundColor(note.getColor());
-
-        holder.buttonPinNote.setImageResource(note.isPinned() ? R.drawable.ic_pin_on : R.drawable.ic_pin_off);
-
-        holder.buttonPinNote.setOnClickListener(v -> {
-            listener.onPinClick(note, holder.getAdapterPosition());
-        });
-
-        holder.buttonDeleteNote.setOnClickListener(v -> {
-            showDeleteConfirmationDialog(note, holder.getAdapterPosition());
-        });
+    String displayText;
+    if (!TextUtils.isEmpty(note.getTitle())) {
+        displayText = note.getTitle();
+    } else if (note.isChecklist()) {
+        if (note.getChecklist() != null && !note.getChecklist().isEmpty()) {
+            displayText = note.getChecklist().get(0).text;
+        } else {
+            displayText = "";
+        }
+    } else {
+        String content = note.getContent();
+        if (!TextUtils.isEmpty(content)) {
+            int idx = content.indexOf('\n');
+            displayText = idx >= 0 ? content.substring(0, idx) : content;
+        } else {
+            displayText = "";
+        }
     }
+    holder.textViewNoteTitle.setText(displayText);
+    holder.textViewNoteTitle.setMaxLines(2);
+    holder.itemView.setBackgroundColor(note.getColor());
+
+    holder.buttonPinNote.setImageResource(note.isPinned() ? R.drawable.ic_pin_on : R.drawable.ic_pin_off);
+
+    holder.buttonPinNote.setOnClickListener(v -> {
+        if (holder.getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
+            listener.onPinClick(note, holder.getBindingAdapterPosition());
+        }
+    });
+
+    holder.buttonDeleteNote.setOnClickListener(v -> {
+        if (holder.getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
+            showDeleteConfirmationDialog(note, holder.getBindingAdapterPosition());
+        }
+    });
+}
 
     private void showDeleteConfirmationDialog(Note note, int position) {
         final Dialog dialog = new Dialog(context);
@@ -108,7 +128,11 @@ public class NoteAdapter extends ListAdapter<Note, NoteAdapter.NoteViewHolder> {
         }
 
         public void bind(final Note note, final OnNoteClickListener listener) {
-            itemView.setOnClickListener(v -> listener.onNoteClick(note, getAdapterPosition()));
+            itemView.setOnClickListener(v -> {
+                if (getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
+                    listener.onNoteClick(note, getBindingAdapterPosition());
+                }
+            });
         }
     }
 }

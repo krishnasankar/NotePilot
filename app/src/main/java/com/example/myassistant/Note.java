@@ -1,10 +1,14 @@
 package com.example.myassistant;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
 public class Note implements Serializable {
+    private List<ChecklistItem> checklist = new ArrayList<>();
+    private boolean isChecklist = false;
     private final long id;
     private String title;
     private String content;
@@ -13,25 +17,38 @@ public class Note implements Serializable {
     private boolean pinned;
     private long pinnedTimestamp;
 
-    public Note(String title, String content, int color) {
-        this.id = UUID.randomUUID().getMostSignificantBits();
-        this.title = title;
-        this.content = content;
-        this.color = color;
-        this.lastModified = System.currentTimeMillis();
-        this.pinned = false;
-        this.pinnedTimestamp = 0;
-    }
+public Note(String title, String content, int color) {
+    this.id = UUID.randomUUID().getMostSignificantBits();
+    this.title = title;
+    this.content = content;
+    this.color = color;
+    this.lastModified = System.currentTimeMillis();
+    this.pinned = false;
+    this.pinnedTimestamp = 0;
+}
 
-    public Note(Note original) {
-        this.id = original.id;
-        this.title = original.title;
-        this.content = original.content;
-        this.color = original.color;
-        this.lastModified = original.lastModified;
-        this.pinned = original.pinned;
-        this.pinnedTimestamp = original.pinnedTimestamp;
-    }
+public Note(String title, List<ChecklistItem> checklist, int color) {
+    this.id = UUID.randomUUID().getMostSignificantBits();
+    this.title = title;
+    this.checklist = checklist;
+    this.isChecklist = true;
+    this.color = color;
+    this.lastModified = System.currentTimeMillis();
+    this.pinned = false;
+    this.pinnedTimestamp = 0;
+}
+
+public Note(Note original) {
+    this.id = original.id;
+    this.title = original.title;
+    this.content = original.content;
+    this.checklist = new ArrayList<>(original.checklist);
+    this.isChecklist = original.isChecklist;
+    this.color = original.color;
+    this.lastModified = original.lastModified;
+    this.pinned = original.pinned;
+    this.pinnedTimestamp = original.pinnedTimestamp;
+}
 
     public long getId() {
         return id;
@@ -50,10 +67,28 @@ public class Note implements Serializable {
         return content;
     }
 
-    public void setContent(String content) {
-        this.content = content;
-        this.lastModified = System.currentTimeMillis();
-    }
+public void setContent(String content) {
+    this.content = content;
+    this.lastModified = System.currentTimeMillis();
+}
+
+public List<ChecklistItem> getChecklist() {
+    return checklist;
+}
+
+public void setChecklist(List<ChecklistItem> checklist) {
+    this.checklist = checklist;
+    this.lastModified = System.currentTimeMillis();
+}
+
+public boolean isChecklist() {
+    return isChecklist;
+}
+
+public void setChecklist(boolean checklist) {
+    isChecklist = checklist;
+    this.lastModified = System.currentTimeMillis();
+}
 
     public int getColor() {
         return color;
@@ -95,11 +130,13 @@ public class Note implements Serializable {
                 pinned == note.pinned &&
                 pinnedTimestamp == note.pinnedTimestamp &&
                 Objects.equals(title, note.title) &&
-                Objects.equals(content, note.content);
+                Objects.equals(content, note.content) &&
+                isChecklist == note.isChecklist &&
+                Objects.equals(checklist, note.checklist);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, title, content, color, lastModified, pinned, pinnedTimestamp);
+return Objects.hash(id, title, content, checklist, isChecklist, color, lastModified, pinned, pinnedTimestamp);
     }
 }
