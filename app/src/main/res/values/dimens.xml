@@ -1,4 +1,20 @@
 <resources>
-    <!-- space to accommodate FAB so content doesn't hide under it -->
-    <dimen name="fab_safe_bottom">88dp</dimen>
+    <!-- FAB and safe insets -->
+    <dimen name="fab_safe_bottom">96dp</dimen>
+
+    <!-- Corner Radii -->
+    <dimen name="card_corner_radius">16dp</dimen>
+    <dimen name="card_corner_radius_small">12dp</dimen>
+    <dimen name="chip_corner_radius">20dp</dimen>
+    <dimen name="dialog_corner_radius">24dp</dimen>
+
+    <!-- Elevations -->
+    <dimen name="card_elevation">0dp</dimen>
+    <dimen name="dialog_elevation">8dp</dimen>
+
+    <!-- Spacing -->
+    <dimen name="spacing_tiny">4dp</dimen>
+    <dimen name="spacing_small">8dp</dimen>
+    <dimen name="spacing_medium">16dp</dimen>
+    <dimen name="spacing_large">24dp</dimen>
 </resources>

@@ -2,20 +2,68 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="key_present_green">#4CAF50</color>
-    <color name="key_missing_red">#F44336</color>
+    <color name="transparent">#00000000</color>
 
-    <!-- Modern Dark UI Palette -->
-    <color name="colorPrimary">#1A1A2E</color>
-    <color name="colorPrimaryDark">#162447</color>
-    <color name="colorAccent">#E94560</color>
-    <color name="textColorPrimary">#FFFFFF</color>
-    <color name="textColorSecondary">#B0B0B0</color>
-    <color name="noteBackgroundColor">#1E1E3F</color>
+    <!-- 2026 Brand & Accent: Luminescent Neo-Mint / Obsidian Glow -->
+    <color name="primary">#00D492</color>
+    <color name="onPrimary">#07140E</color>
+    <color name="colorPrimary">#00D492</color>
+    <color name="colorPrimaryDark">#00B377</color>
+    <color name="colorPrimaryContainer">#13382C</color>
+    <color name="colorOnPrimary">#07140E</color>
+    <color name="colorOnPrimaryContainer">#00D492</color>
 
-    <color name="note_color_1">#2A2A4D</color>
-    <color name="note_color_2">#3B3B6D</color>
-    <color name="note_color_3">#4C4C8D</color>
-    <color name="note_color_4">#5D5DAE</color>
-    <color name="note_color_5">#6E6EAF</color>
+    <color name="colorAccent">#FF6B6B</color>
+    <color name="colorAccentContainer">#3D1B1B</color>
+    <color name="colorOnAccent">#FFFFFF</color>
+    <color name="colorSecondary">#38BDF8</color>
+    <color name="colorSecondaryContainer">#122B38</color>
+
+    <!-- Surfaces & Foundation (Obsidian / Titanium Carbon - Zero Muddy Blue) -->
+    <color name="appBackground">#0B0D11</color>
+    <color name="colorBackground">#0B0D11</color>
+    <color name="surface">#13161C</color>
+    <color name="surfaceContainer">#161A22</color>
+    <color name="surfaceContainerHighest">#1E232E</color>
+    <color name="surfaceElevated">#1E232E</color>
+    <color name="surfaceVariant">#1A1E27</color>
+    <color name="surfaceOutline">#282E3C</color>
+    <color name="noteBackgroundColor">#13161C</color>
+
+    <!-- Typography -->
+    <color name="textColorPrimary">#F3F4F6</color>
+    <color name="textColorSecondary">#9CA3AF</color>
+    <color name="textColorTertiary">#64748B</color>
+
+    <!-- Status -->
+    <color name="key_present_green">#00D492</color>
+    <color name="key_missing_red">#FF5252</color>
+    <color name="status_warning">#F59E0B</color>
+
+    <!-- Note Accents (Modern 2026 Fresh Palette) -->
+    <color name="note_color_1">#222733</color>
+    <color name="note_color_2">#143528</color>
+    <color name="note_color_3">#132F3D</color>
+    <color name="note_color_4">#352B17</color>
+    <color name="note_color_5">#381C25</color>
+
+    <!-- Note Strip Accents -->
+    <color name="note_accent_blue">#00C8FF</color>
+    <color name="note_accent_green">#00D492</color>
+    <color name="note_accent_purple">#A78BFA</color>
+    <color name="note_accent_amber">#F59E0B</color>
+    <color name="note_accent_rose">#FF6B6B</color>
+
+    <!-- Note Accent Aliases for NoteDetail & ColorPicker -->
+    <color name="noteAccentBlue">#00C8FF</color>
+    <color name="noteAccentGreen">#00D492</color>
+    <color name="noteAccentPurple">#A78BFA</color>
+    <color name="noteAccentAmber">#F59E0B</color>
+    <color name="noteAccentRed">#FF6B6B</color>
+    <color name="noteAccentCyan">#2DD4BF</color>
+
+    <!-- Chat Bubbles -->
+    <color name="chatUserBubble">#0F382A</color>
+    <color name="chatAssistantBubble">#161A22</color>
+    <color name="chatThinkingBubble">#1A1E27</color>
 </resources>

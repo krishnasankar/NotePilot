@@ -10,7 +10,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 import io.noties.markwon.Markwon;
 
-public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder> {
+public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     public interface OnMessageActionListener {
         void onSpeak(ChatMessage message, int position);
@@ -18,10 +18,13 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
         void onSaveAsNote(ChatMessage message);
     }
 
+    private static final int VIEW_TYPE_LOADING = 99;
+
     private final List<ChatMessage> messages;
     private final Markwon markwon;
     private OnMessageActionListener actionListener;
     private int currentlySpeakingPosition = -1;
+    private boolean isLoading = false;
 
     public ChatAdapter(List<ChatMessage> messages, Markwon markwon) {
         this(messages, markwon, null);
@@ -35,6 +38,21 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
 
     public void setOnMessageActionListener(OnMessageActionListener listener) {
         this.actionListener = listener;
+    }
+
+    public void setLoading(boolean loading) {
+        if (this.isLoading != loading) {
+            this.isLoading = loading;
+            if (loading) {
+                notifyItemInserted(messages.size());
+            } else {
+                notifyItemRemoved(messages.size());
+            }
+        }
+    }
+
+    public boolean isLoading() {
+        return isLoading;
     }
 
     public void setCurrentlySpeakingPosition(int position) {
@@ -54,31 +72,39 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
 
     @Override
     public int getItemViewType(int position) {
+        if (isLoading && position == messages.size()) {
+            return VIEW_TYPE_LOADING;
+        }
         return messages.get(position).getAuthor().ordinal();
     }
 
     @NonNull
     @Override
-    public ChatViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view;
-        if (viewType == ChatMessage.Author.USER.ordinal()) {
-            view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_chat_user, parent, false);
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == VIEW_TYPE_LOADING) {
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_chat_loading, parent, false);
+            return new LoadingViewHolder(view);
+        } else if (viewType == ChatMessage.Author.USER.ordinal()) {
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_chat_user, parent, false);
+            return new ChatViewHolder(view, markwon);
         } else {
-            view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_chat_message, parent, false);
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_chat_message, parent, false);
+            return new ChatViewHolder(view, markwon);
         }
-        return new ChatViewHolder(view, markwon);
     }
 
     @Override
-    public void onBindViewHolder(@NonNull ChatViewHolder holder, int position) {
-        ChatMessage message = messages.get(position);
-        boolean isSpeaking = (position == currentlySpeakingPosition);
-        holder.bind(message, position, isSpeaking, actionListener);
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        if (holder instanceof ChatViewHolder) {
+            ChatMessage message = messages.get(position);
+            boolean isSpeaking = (position == currentlySpeakingPosition);
+            ((ChatViewHolder) holder).bind(message, position, isSpeaking, actionListener);
+        }
     }
 
     @Override
     public int getItemCount() {
-        return messages.size();
+        return messages.size() + (isLoading ? 1 : 0);
     }
 
     static class ChatViewHolder extends RecyclerView.ViewHolder {
@@ -120,6 +146,12 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ChatViewHolder
                     });
                 }
             }
+        }
+    }
+
+    static class LoadingViewHolder extends RecyclerView.ViewHolder {
+        public LoadingViewHolder(@NonNull View itemView) {
+            super(itemView);
         }
     }
 }

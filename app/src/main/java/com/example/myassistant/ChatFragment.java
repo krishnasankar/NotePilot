@@ -74,7 +74,7 @@ import okhttp3.Response;
 public class ChatFragment extends Fragment {
 
     private EditText editTextPrompt;
-    private ImageButton buttonSend;
+    private View buttonSend;
     private ProgressBar progressBar;
     private RecyclerView chatRecyclerView;
     private ChatAdapter chatAdapter;
@@ -349,10 +349,8 @@ public class ChatFragment extends Fragment {
         if (getContext() == null || TextUtils.isEmpty(content)) return;
         String title = deriveTitleFromContent(content);
         List<Note> notes = NotesStorage.loadNotes(getContext());
-        int[] noteColors = getResources().getIntArray(R.array.note_colors);
-        int randomColor = noteColors[new Random().nextInt(noteColors.length)];
-
-        Note newNote = new Note(title, content, randomColor);
+        if (notes == null) notes = new ArrayList<>();
+        Note newNote = new Note(title, content, 0);
         notes.add(0, newNote);
         NotesStorage.saveNotes(getContext(), notes);
         Toast.makeText(getContext(), "Saved to Notes: " + title, Toast.LENGTH_SHORT).show();
@@ -616,15 +614,12 @@ public class ChatFragment extends Fragment {
             }
             targetNote.setLastModified(System.currentTimeMillis());
         } else {
-            int[] noteColors = getResources().getIntArray(R.array.note_colors);
-            int randomColor = noteColors[new Random().nextInt(noteColors.length)];
-
             boolean shouldBeChecklist = isChecklistRequested || isLikelyChecklist(title, content);
             if (shouldBeChecklist) {
                 List<ChecklistItem> items = parseChecklistItems(content);
-                targetNote = new Note(title, items, randomColor);
+                targetNote = new Note(title, items, 0);
             } else {
-                targetNote = new Note(title, content, randomColor);
+                targetNote = new Note(title, content, 0);
             }
             notes.add(targetNote);
         }
@@ -743,9 +738,28 @@ public class ChatFragment extends Fragment {
     private void setLoading(boolean loading) {
         if (getActivity() != null) {
             getActivity().runOnUiThread(() -> {
-                progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
-                buttonSend.setEnabled(!loading);
+                if (progressBar != null) {
+                    progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
+                }
+                if (buttonSend != null) {
+                    buttonSend.setEnabled(!loading);
+                }
+                if (chatAdapter != null) {
+                    chatAdapter.setLoading(loading);
+                    if (loading && chatRecyclerView != null) {
+                        chatRecyclerView.post(() -> chatRecyclerView.smoothScrollToPosition(chatAdapter.getItemCount() - 1));
+                    }
+                }
             });
+        }
+    }
+
+    public void onAskAiAboutNote(String title, String content) {
+        String query = "Summarize my note \"" + (title != null && !title.trim().isEmpty() ? title : "Untitled") + "\"";
+        if (editTextPrompt != null) {
+            editTextPrompt.setText(query);
+            editTextPrompt.setSelection(query.length());
+            editTextPrompt.requestFocus();
         }
     }
 

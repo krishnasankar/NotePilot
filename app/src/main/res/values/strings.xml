@@ -1,3 +1,98 @@
 <resources>
     <string name="app_name">NotePilot</string>
+    <string name="app_subtitle">The AI chat assistant powered by your notes</string>
+    <string name="title_tab_notes">NotePilot</string>
+    <string name="subtitle_tab_notes">Capture ideas, tasks &amp; checklists</string>
+    <string name="title_tab_chat">NotePilot AI</string>
+    <string name="subtitle_tab_chat">Neural assistant powered by your notes</string>
+
+    <!-- Navigation -->
+    <string name="nav_notes">Notes</string>
+    <string name="nav_chat">Chat</string>
+
+    <!-- Notes Tab -->
+    <string name="search_notes_hint">Search notes and checklists…</string>
+    <string name="empty_notes_title">No notes yet</string>
+    <string name="empty_notes_desc">Tap + to create your first note, or jump to Chat and ask AI to create one!</string>
+    <string name="empty_search_title">No notes found</string>
+    <string name="empty_search_desc">No notes match your search query.</string>
+    <string name="action_add_note">New Note</string>
+    <string name="action_pin_note">Pin note</string>
+    <string name="action_unpin_note">Unpin note</string>
+    <string name="action_delete_note">Delete note</string>
+    <string name="action_save_note">Save note</string>
+
+    <!-- Note Detail -->
+    <string name="title_new_note">New Note</string>
+    <string name="title_edit_note">Edit Note</string>
+    <string name="hint_note_title">Title</string>
+    <string name="hint_note_content">Start typing your note…</string>
+    <string name="hint_checklist_item">Checklist item</string>
+    <string name="add_checklist_item">Add item</string>
+    <string name="mode_text">Text</string>
+    <string name="mode_checklist">Checklist</string>
+    <string name="action_ask_ai">Ask AI</string>
+    <string name="action_note_color">Color</string>
+    <string name="delete">Delete</string>
+    <string name="add_item">Add item</string>
+    <string name="color_default">Default</string>
+    <string name="color_coral">Coral</string>
+    <string name="color_amber">Amber</string>
+    <string name="color_mint">Mint</string>
+    <string name="color_cyan">Cyan</string>
+    <string name="color_lavender">Lavender</string>
+    <string name="action_ask_ai_about_note">Ask AI about this</string>
+    <string name="action_change_color">Change note color</string>
+    <string name="stat_words">%d words</string>
+    <string name="stat_items">%1$d/%2$d done</string>
+    <string name="saved_just_now">Saved just now</string>
+    <string name="modified_prefix">Modified %s</string>
+
+    <!-- Delete Dialog -->
+    <string name="dialog_delete_title">Delete Note?</string>
+    <string name="dialog_delete_message">Are you sure you want to delete this note? This action cannot be undone.</string>
+    <string name="dialog_btn_cancel">Cancel</string>
+    <string name="dialog_btn_delete">Delete</string>
+    <string name="dialog_btn_save">Save</string>
+    <string name="dialog_btn_clear">Clear</string>
+
+    <!-- Chat Tab -->
+    <string name="chat_header_title">NotePilot Assistant</string>
+    <string name="chat_header_desc">Ask questions about your notes, create checklists, or tap a suggestion below to get started.</string>
+    <string name="chat_input_hint">Ask anything about your notes…</string>
+    <string name="chat_clear_input">Clear input</string>
+    <string name="chat_voice_input">Voice input</string>
+    <string name="chat_send_prompt">Send question</string>
+    <string name="chat_export">Export chat</string>
+    <string name="chat_clear_context">Clear chat context</string>
+    <string name="chat_action_speak">Read aloud</string>
+    <string name="chat_action_stop">Stop speaking</string>
+    <string name="chat_action_copy">Copy response</string>
+    <string name="chat_action_save">Save as note</string>
+    <string name="chat_thinking_hint">NotePilot AI is analyzing your notes…</string>
+    <string name="chat_enter_question">Please enter a question</string>
+
+    <!-- Starter Chips -->
+    <string name="chip_summarize">📋 Summarize notes</string>
+    <string name="chip_tasks">✅ Review to-dos</string>
+    <string name="chip_plan">💡 Plan my day</string>
+    <string name="chip_shopping">🛒 Shopping list</string>
+
+    <!-- Settings Dialog -->
+    <string name="settings_title">Gemini AI Settings</string>
+    <string name="settings_help_desc">Get a 100% free Gemini API key from Google AI Studio. No credit card required. Free tier includes up to 15 requests/min (1,500/day).</string>
+    <string name="settings_get_free_key">Get Free Gemini Key ↗</string>
+    <string name="settings_key_label">Google Gemini API Key</string>
+    <string name="settings_key_hint">AIza… or AQ….</string>
+    <string name="settings_model_label">Gemini Model</string>
+    <string name="settings_custom_model_hint">Custom model ID (e.g. gemini-3.5-flash)</string>
+    <string name="settings_privacy_label">Permissions &amp; Privacy</string>
+    <string name="settings_allow_auto_edit">Allow AI to edit notes automatically</string>
+    <string name="settings_allow_location">Share approximate location with AI</string>
+    <string name="settings_saved_toast">Settings saved</string>
+    <string name="settings_no_changes_toast">No changes saved</string>
+
+    <!-- Clear Context Dialog -->
+    <string name="dialog_clear_title">Clear Chat History?</string>
+    <string name="dialog_clear_message">This will remove all current messages from the chat context.</string>
 </resources>

@@ -9,8 +9,8 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ImageButton;
+import android.widget.CompoundButton;
 import android.widget.Spinner;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -29,6 +29,8 @@ public class MainActivity extends AppCompatActivity {
     private Fragment activeFragment;
     private ImageButton buttonSettings;
     private View keyStatusDot;
+    private TextView textTitle;
+    private TextView textSubtitle;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,16 +39,20 @@ public class MainActivity extends AppCompatActivity {
 
         buttonSettings = findViewById(R.id.buttonSettings);
         keyStatusDot = findViewById(R.id.keyStatusDot);
+        textTitle = findViewById(R.id.textTitle);
+        textSubtitle = findViewById(R.id.textSubtitle);
 
         BottomNavigationView navigation = findViewById(R.id.bottom_navigation);
         navigation.setOnItemSelectedListener(item -> {
             if (item.getItemId() == R.id.navigation_notes) {
                 fm.beginTransaction().hide(activeFragment).show(notesFragment).commit();
                 activeFragment = notesFragment;
+                updateHeaderForTab(R.id.navigation_notes);
                 return true;
             } else if (item.getItemId() == R.id.navigation_chat) {
                 fm.beginTransaction().hide(activeFragment).show(chatFragment).commit();
                 activeFragment = chatFragment;
+                updateHeaderForTab(R.id.navigation_chat);
                 return true;
             }
             return false;
@@ -61,19 +67,58 @@ public class MainActivity extends AppCompatActivity {
                     .commit();
             activeFragment = notesFragment;
             navigation.setSelectedItemId(R.id.navigation_notes);
+            updateHeaderForTab(R.id.navigation_notes);
         } else {
             notesFragment = fm.findFragmentByTag("notes");
             chatFragment = fm.findFragmentByTag("chat");
             // find the visible fragment
             if (notesFragment != null && notesFragment.isVisible()) {
                 activeFragment = notesFragment;
+                updateHeaderForTab(R.id.navigation_notes);
             } else {
                 activeFragment = chatFragment;
+                updateHeaderForTab(R.id.navigation_chat);
             }
         }
 
         buttonSettings.setOnClickListener(v -> showApiKeyDialog());
         updateKeyStatus();
+
+        handleIncomingIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingIntent(intent);
+    }
+
+    private void handleIncomingIntent(Intent intent) {
+        if (intent == null) return;
+        String action = intent.getStringExtra("ACTION");
+        if ("ASK_AI_ABOUT_NOTE".equals(action)) {
+            String title = intent.getStringExtra("NOTE_TITLE");
+            String content = intent.getStringExtra("NOTE_CONTENT");
+            BottomNavigationView navigation = findViewById(R.id.bottom_navigation);
+            if (navigation != null) {
+                navigation.setSelectedItemId(R.id.navigation_chat);
+            }
+            if (chatFragment instanceof ChatFragment) {
+                ((ChatFragment) chatFragment).onAskAiAboutNote(title, content);
+            }
+        }
+    }
+
+    private void updateHeaderForTab(int tabId) {
+        if (textTitle == null || textSubtitle == null) return;
+        if (tabId == R.id.navigation_notes) {
+            textTitle.setText(R.string.title_tab_notes);
+            textSubtitle.setText(R.string.subtitle_tab_notes);
+        } else if (tabId == R.id.navigation_chat) {
+            textTitle.setText(R.string.title_tab_chat);
+            textSubtitle.setText(R.string.subtitle_tab_chat);
+        }
     }
 
     @Override
@@ -102,8 +147,8 @@ public class MainActivity extends AppCompatActivity {
         android.widget.EditText input = view.findViewById(R.id.editApiKey);
         Spinner spinnerModel = view.findViewById(R.id.spinnerModel);
         android.widget.EditText editCustomModel = view.findViewById(R.id.editCustomModel);
-        Switch editPermissionSwitch = view.findViewById(R.id.editPermissionSwitch);
-        Switch locationPermissionSwitch = view.findViewById(R.id.locationPermissionSwitch);
+        CompoundButton editPermissionSwitch = view.findViewById(R.id.editPermissionSwitch);
+        CompoundButton locationPermissionSwitch = view.findViewById(R.id.locationPermissionSwitch);
         android.widget.Button btnSave = view.findViewById(R.id.btnSave);
         android.widget.Button btnCancel = view.findViewById(R.id.btnCancel);
 

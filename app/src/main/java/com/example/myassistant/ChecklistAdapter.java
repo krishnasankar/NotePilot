@@ -2,16 +2,22 @@ package com.example.myassistant;
 
 import android.content.Context;
 import android.graphics.Paint;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageButton;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.checkbox.MaterialCheckBox;
 
 import java.util.List;
 
@@ -22,14 +28,23 @@ public class ChecklistAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
 
     private final List<ChecklistItem> items;
     private final OnItemAddedListener listener;
+    private OnChecklistChangeListener changeListener;
 
     public interface OnItemAddedListener {
         void onItemAdded();
     }
 
+    public interface OnChecklistChangeListener {
+        void onChecklistChanged();
+    }
+
     public ChecklistAdapter(List<ChecklistItem> items, OnItemAddedListener listener) {
         this.items = items;
         this.listener = listener;
+    }
+
+    public void setOnChecklistChangeListener(OnChecklistChangeListener changeListener) {
+        this.changeListener = changeListener;
     }
 
     @Override
@@ -55,37 +70,32 @@ public class ChecklistAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
     @Override
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         if (holder instanceof ChecklistViewHolder) {
-            ChecklistItem item = items.get(position);
             ChecklistViewHolder checklistHolder = (ChecklistViewHolder) holder;
+            ChecklistItem item = items.get(position);
+
+            // Detach listeners before setting values to avoid firing during recycling
+            checklistHolder.detachListeners();
+
             checklistHolder.editTextItem.setText(item.text);
             checklistHolder.checkBoxItem.setChecked(item.checked);
-            if (item.checked) {
-                checklistHolder.editTextItem.setPaintFlags(checklistHolder.editTextItem.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-            } else {
-                checklistHolder.editTextItem.setPaintFlags(checklistHolder.editTextItem.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-            }
+            updateStrikeThrough(checklistHolder.editTextItem, item.checked);
 
-            checklistHolder.checkBoxItem.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                item.checked = isChecked;
-                if (isChecked) {
-                    checklistHolder.editTextItem.setPaintFlags(checklistHolder.editTextItem.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-                } else {
-                    checklistHolder.editTextItem.setPaintFlags(checklistHolder.editTextItem.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
+            // Set up check listener
+            checklistHolder.checkListener = (buttonView, isChecked) -> {
+                int currentPos = checklistHolder.getBindingAdapterPosition();
+                if (currentPos != RecyclerView.NO_POSITION && currentPos < items.size()) {
+                    ChecklistItem currentItem = items.get(currentPos);
+                    currentItem.checked = isChecked;
+                    updateStrikeThrough(checklistHolder.editTextItem, isChecked);
+                    if (changeListener != null) {
+                        changeListener.onChecklistChanged();
+                    }
                 }
-            });
+            };
+            checklistHolder.checkBoxItem.setOnCheckedChangeListener(checklistHolder.checkListener);
 
-            checklistHolder.buttonDeleteItem.setOnClickListener(v -> {
-                items.remove(position);
-                notifyItemRemoved(position);
-                notifyItemRangeChanged(position, getItemCount() - position);
-
-                // Clear focus and hide keyboard when deleting an item
-                checklistHolder.editTextItem.clearFocus();
-                InputMethodManager imm = (InputMethodManager) holder.itemView.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-                imm.hideSoftInputFromWindow(checklistHolder.editTextItem.getWindowToken(), 0);
-            });
-
-            checklistHolder.editTextItem.addTextChangedListener(new android.text.TextWatcher() {
+            // Set up text change listener
+            checklistHolder.textWatcher = new TextWatcher() {
                 @Override
                 public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
 
@@ -93,16 +103,46 @@ public class ChecklistAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
                 public void onTextChanged(CharSequence s, int start, int before, int count) {}
 
                 @Override
-                public void afterTextChanged(android.text.Editable s) {
-                    item.text = s.toString();
+                public void afterTextChanged(Editable s) {
+                    int currentPos = checklistHolder.getBindingAdapterPosition();
+                    if (currentPos != RecyclerView.NO_POSITION && currentPos < items.size()) {
+                        items.get(currentPos).text = s.toString();
+                        if (changeListener != null) {
+                            changeListener.onChecklistChanged();
+                        }
+                    }
+                }
+            };
+            checklistHolder.editTextItem.addTextChangedListener(checklistHolder.textWatcher);
+
+            // Delete item listener with correct dynamic position
+            checklistHolder.buttonDeleteItem.setOnClickListener(v -> {
+                int currentPos = checklistHolder.getBindingAdapterPosition();
+                if (currentPos != RecyclerView.NO_POSITION && currentPos < items.size()) {
+                    items.remove(currentPos);
+                    notifyItemRemoved(currentPos);
+                    notifyItemRangeChanged(currentPos, getItemCount() - currentPos);
+
+                    if (changeListener != null) {
+                        changeListener.onChecklistChanged();
+                    }
+
+                    // Hide keyboard if no more items
+                    if (items.isEmpty()) {
+                        checklistHolder.editTextItem.clearFocus();
+                        InputMethodManager imm = (InputMethodManager) holder.itemView.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+                        if (imm != null) {
+                            imm.hideSoftInputFromWindow(checklistHolder.editTextItem.getWindowToken(), 0);
+                        }
+                    }
                 }
             });
 
-            // Add Enter key listener to create new item when Enter is pressed
+            // Enter key listener to add a new item
             checklistHolder.editTextItem.setOnEditorActionListener((v, actionId, event) -> {
-                if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE ||
-                    (event != null && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER && event.getAction() == android.view.KeyEvent.ACTION_DOWN)) {
-                    // Create new checklist item
+                if (actionId == EditorInfo.IME_ACTION_DONE ||
+                        actionId == EditorInfo.IME_ACTION_NEXT ||
+                        (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN)) {
                     if (listener != null) {
                         listener.onItemAdded();
                     }
@@ -110,6 +150,7 @@ public class ChecklistAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
                 }
                 return false;
             });
+
         } else if (holder instanceof AddItemViewHolder) {
             AddItemViewHolder addHolder = (AddItemViewHolder) holder;
             addHolder.itemView.setOnClickListener(v -> {
@@ -120,50 +161,78 @@ public class ChecklistAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
         }
     }
 
+    private void updateStrikeThrough(EditText editText, boolean checked) {
+        if (checked) {
+            editText.setPaintFlags(editText.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+            editText.setAlpha(0.6f);
+        } else {
+            editText.setPaintFlags(editText.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
+            editText.setAlpha(1.0f);
+        }
+    }
+
     @Override
     public int getItemCount() {
-        return items.size() + 1; // +1 for the add item
+        return items.size() + 1; // +1 for the add item row
     }
 
     public void addItem(ChecklistItem item) {
         items.add(item);
         notifyItemInserted(items.size() - 1);
         notifyItemChanged(items.size()); // Update the add item position
+        if (changeListener != null) {
+            changeListener.onChecklistChanged();
+        }
     }
 
     public void addItemAndFocus(ChecklistItem item, RecyclerView recyclerView) {
         items.add(item);
-        notifyItemInserted(items.size() - 1);
+        int newPos = items.size() - 1;
+        notifyItemInserted(newPos);
         notifyItemChanged(items.size()); // Update the add item position
+        if (changeListener != null) {
+            changeListener.onChecklistChanged();
+        }
 
-        // Focus on the newly added item and scroll to make it visible
+        // Scroll and focus on new item
         recyclerView.post(() -> {
-            // Smooth scroll to show the newly added item and keep the add button visible
-            recyclerView.smoothScrollToPosition(items.size()); // Scroll to the add button position
-
-            // Focus on the newly added item
-            recyclerView.post(() -> {
-                RecyclerView.ViewHolder holder = recyclerView.findViewHolderForAdapterPosition(items.size() - 1);
+            recyclerView.smoothScrollToPosition(items.size());
+            recyclerView.postDelayed(() -> {
+                RecyclerView.ViewHolder holder = recyclerView.findViewHolderForAdapterPosition(newPos);
                 if (holder instanceof ChecklistViewHolder) {
-                    ((ChecklistViewHolder) holder).editTextItem.requestFocus();
-                    ((ChecklistViewHolder) holder).editTextItem.setSelection(((ChecklistViewHolder) holder).editTextItem.getText().length());
+                    ChecklistViewHolder cvh = (ChecklistViewHolder) holder;
+                    cvh.editTextItem.requestFocus();
+                    cvh.editTextItem.setSelection(cvh.editTextItem.getText().length());
                     InputMethodManager imm = (InputMethodManager) recyclerView.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-                    imm.showSoftInput(((ChecklistViewHolder) holder).editTextItem, InputMethodManager.SHOW_IMPLICIT);
+                    if (imm != null) {
+                        imm.showSoftInput(cvh.editTextItem, InputMethodManager.SHOW_IMPLICIT);
+                    }
                 }
-            });
+            }, 100);
         });
     }
 
     static class ChecklistViewHolder extends RecyclerView.ViewHolder {
-        CheckBox checkBoxItem;
+        MaterialCheckBox checkBoxItem;
         EditText editTextItem;
         ImageButton buttonDeleteItem;
+        TextWatcher textWatcher;
+        CompoundButton.OnCheckedChangeListener checkListener;
 
         public ChecklistViewHolder(@NonNull View itemView) {
             super(itemView);
             checkBoxItem = itemView.findViewById(R.id.checkBoxItem);
             editTextItem = itemView.findViewById(R.id.editTextItem);
             buttonDeleteItem = itemView.findViewById(R.id.buttonDeleteItem);
+        }
+
+        void detachListeners() {
+            if (textWatcher != null) {
+                editTextItem.removeTextChangedListener(textWatcher);
+                textWatcher = null;
+            }
+            checkBoxItem.setOnCheckedChangeListener(null);
+            checkListener = null;
         }
     }
 

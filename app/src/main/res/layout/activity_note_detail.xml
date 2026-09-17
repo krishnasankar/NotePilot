@@ -1,84 +1,157 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/rootNoteDetail"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:orientation="vertical"
-    android:padding="16dp"
-    android:background="@color/colorPrimary"
+    android:background="@color/colorBackground"
     tools:context=".NoteDetailActivity">
 
-    <EditText
-        android:id="@+id/editTextNoteTitle"
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Title"
-        android:textAppearance="@style/TextAppearance.AppCompat.Large"
-        android:textStyle="bold"
-        android:textColor="@color/textColorPrimary"
-        android:textColorHint="@color/textColorSecondary"
-        android:background="@android:color/transparent"
-        android:paddingBottom="8dp"
-        android:inputType="textCapSentences"
-        android:imeOptions="actionNext"/>
+        android:background="@color/colorBackground"
+        app:elevation="0dp">
 
-    <View
-        android:id="@+id/titleSeparator"
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/noteBackgroundColor"
-        android:layout_below="@+id/editTextNoteTitle"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="16dp"/>
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:navigationIcon="@drawable/ic_arrow_back_24"
+            app:navigationIconTint="@color/textColorPrimary"
+            app:title=""
+            app:menu="@menu/menu_note_detail" />
 
+        <!-- Accent color bar -->
+        <View
+            android:id="@+id/viewColorAccentBar"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:background="@android:color/transparent" />
 
-    <EditText
-        android:id="@+id/editTextNoteContent"
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@+id/titleSeparator"
-        android:layout_marginBottom="72dp"
-        android:background="@android:color/transparent"
-        android:gravity="top"
-        android:hint="Content"
-        android:inputType="textMultiLine|textCapSentences"
-        android:textColor="@color/textColorPrimary"
-        android:textColorHint="@color/textColorSecondary" />
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerViewChecklist"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@+id/titleSeparator"
-        android:layout_marginBottom="72dp"
-        android:visibility="gone" />
+        <!-- Top Title -->
+        <EditText
+            android:id="@+id/editTextNoteTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/hint_note_title"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="@color/textColorPrimary"
+            android:textColorHint="@color/textColorTertiary"
+            android:background="@android:color/transparent"
+            android:paddingHorizontal="20dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="10dp"
+            android:inputType="textCapSentences"
+            android:imeOptions="actionNext" />
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabDeleteNote"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="16dp"
-        android:src="@drawable/ic_delete_24"
-        android:contentDescription="Delete Note" />
+        <View
+            android:id="@+id/titleSeparator"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/surfaceOutline"
+            android:layout_below="@id/editTextNoteTitle"
+            android:layout_marginHorizontal="20dp"
+            android:layout_marginBottom="8dp" />
 
+        <!-- Text Content Mode -->
+        <EditText
+            android:id="@+id/editTextNoteContent"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_below="@id/titleSeparator"
+            android:layout_above="@id/bottomBar"
+            android:background="@android:color/transparent"
+            android:gravity="top"
+            android:hint="@string/hint_note_content"
+            android:inputType="textMultiLine|textCapSentences"
+            android:paddingHorizontal="20dp"
+            android:paddingVertical="8dp"
+            android:textColor="@color/textColorPrimary"
+            android:textColorHint="@color/textColorTertiary"
+            android:lineSpacingExtra="4dp"
+            android:textSize="16sp" />
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabToggleChecklist"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentStart="true"
-        android:layout_margin="16dp"
-        android:src="@drawable/ic_checkbox_off"
-        android:contentDescription="Toggle Checklist"
-        app:backgroundTint="@android:color/transparent"
-        app:elevation="0dp"
-        app:borderWidth="0dp"
-        app:fabSize="mini" />
+        <!-- Checklist Mode -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewChecklist"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_below="@id/titleSeparator"
+            android:layout_above="@id/bottomBar"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="4dp"
+            android:clipToPadding="false"
+            android:visibility="gone" />
 
+        <!-- Bottom Utility Bar (Pill toggle & metadata counters) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/bottomBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            app:cardBackgroundColor="@color/surfaceContainer"
+            app:cardCornerRadius="0dp"
+            app:strokeColor="@color/surfaceOutline"
+            app:strokeWidth="1dp"
+            app:cardElevation="4dp">
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="16dp">
 
-</RelativeLayout>
+                <!-- Mode toggle button (Checklist / Text) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonToggleMode"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingHorizontal="12dp"
+                    android:text="@string/mode_checklist"
+                    android:textColor="@color/textColorPrimary"
+                    android:textSize="12sp"
+                    app:icon="@drawable/ic_format_list_bulleted_24"
+                    app:iconSize="16dp"
+                    app:iconTint="@color/primary"
+                    app:cornerRadius="18dp"
+                    app:backgroundTint="@color/surfaceContainerHighest" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <!-- Checklist progress (hidden for text notes) -->
+                <TextView
+                    android:id="@+id/textViewMetaStats"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/textColorSecondary"
+                    android:textSize="12sp"
+                    android:paddingHorizontal="8dp"
+                    android:visibility="gone"
+                    tools:text="0/0 done"
+                    tools:visibility="visible" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+    </RelativeLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
