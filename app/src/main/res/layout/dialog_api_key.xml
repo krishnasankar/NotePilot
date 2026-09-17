@@ -124,14 +124,14 @@
                 android:textSize="13sp"
                 android:visibility="gone" />
 
-            <!-- PERMISSIONS -->
+            <!-- PERMISSIONS & PRIVACY -->
             <TextView
                 android:id="@+id/textPermissionsTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
                 android:letterSpacing="0.02"
-                android:text="Permissions"
+                android:text="Permissions &amp; Privacy"
                 android:textColor="@android:color/white"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -142,6 +142,15 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="Allow AI to edit notes automatically"
+                android:textColor="#E0FFFFFF"
+                android:textSize="14sp" />
+
+            <Switch
+                android:id="@+id/locationPermissionSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="Share approximate location with AI"
                 android:textColor="#E0FFFFFF"
                 android:textSize="14sp" />
 

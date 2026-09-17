@@ -1,6 +1,8 @@
 package com.example.myassistant;
 
 import android.Manifest;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -9,6 +11,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.RecognizerIntent;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -18,7 +22,9 @@ import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -53,6 +59,8 @@ import java.util.Random;
 import java.util.LinkedHashSet;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import io.noties.markwon.Markwon;
 import okhttp3.Call;
@@ -74,6 +82,10 @@ public class ChatFragment extends Fragment {
     private FusedLocationProviderClient fusedLocationClient;
     private String latestLocationText = "";
     private Markwon markwon;
+    private TextToSpeech textToSpeech;
+    private View layoutEmptyState;
+    private View starterChipsScroll;
+    private ImageButton buttonExportChat;
     private OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
@@ -89,15 +101,24 @@ public class ChatFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_chat, container, false);
 
         markwon = Markwon.create(requireContext());
+        initTextToSpeech();
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
         requestLocationPermissionsIfNeeded();
         editTextPrompt = view.findViewById(R.id.editTextPrompt);
         buttonSend = view.findViewById(R.id.buttonSend);
         progressBar = view.findViewById(R.id.progressBar);
         chatRecyclerView = view.findViewById(R.id.chat_recycler_view);
+        layoutEmptyState = view.findViewById(R.id.layoutEmptyState);
+        starterChipsScroll = view.findViewById(R.id.starterChipsScroll);
+        buttonExportChat = view.findViewById(R.id.buttonExportChat);
         ImageButton buttonClearInput = view.findViewById(R.id.buttonClearInput);
         ImageButton buttonVoice = view.findViewById(R.id.buttonVoice);
+
         buttonClearInput.setOnClickListener(v -> editTextPrompt.setText(""));
+        if (buttonExportChat != null) {
+            buttonExportChat.setOnClickListener(v -> exportChatHistory());
+        }
+
         ImageButton buttonClearContext = view.findViewById(R.id.buttonClearContext);
         buttonClearContext.setOnClickListener(v2 -> {
             if (progressBar != null && progressBar.getVisibility() == View.VISIBLE) {
@@ -112,7 +133,15 @@ public class ChatFragment extends Fragment {
             buttonCancel.setOnClickListener(v -> dialog.dismiss());
             buttonClear.setOnClickListener(v -> {
                 chatHistory.clear();
+                if (getContext() != null) {
+                    ChatHistoryStorage.clearChatHistory(getContext());
+                }
+                if (textToSpeech != null) {
+                    textToSpeech.stop();
+                }
+                chatAdapter.setCurrentlySpeakingPosition(-1);
                 chatAdapter.notifyDataSetChanged();
+                updateEmptyStateVisibility();
                 Toast.makeText(getContext(), "Chat context cleared", Toast.LENGTH_SHORT).show();
                 dialog.dismiss();
             });
@@ -139,9 +168,31 @@ public class ChatFragment extends Fragment {
             public void afterTextChanged(Editable s) {}
         });
 
-        chatAdapter = new ChatAdapter(chatHistory, markwon);
+        chatHistory = ChatHistoryStorage.loadChatHistory(requireContext());
+        chatAdapter = new ChatAdapter(chatHistory, markwon, new ChatAdapter.OnMessageActionListener() {
+            @Override
+            public void onSpeak(ChatMessage message, int position) {
+                toggleSpeech(message, position);
+            }
+
+            @Override
+            public void onCopy(ChatMessage message) {
+                copyToClipboard(message.getContent());
+            }
+
+            @Override
+            public void onSaveAsNote(ChatMessage message) {
+                saveResponseAsNote(message.getContent());
+            }
+        });
         chatRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         chatRecyclerView.setAdapter(chatAdapter);
+        if (!chatHistory.isEmpty()) {
+            chatRecyclerView.scrollToPosition(chatHistory.size() - 1);
+        }
+        updateEmptyStateVisibility();
+
+        setupStarterChips(view);
 
         buttonSend.setOnClickListener(v -> {
             hideKeyboardAndClearFocus();
@@ -181,21 +232,294 @@ public class ChatFragment extends Fragment {
         return view;
     }
 
+    private void initTextToSpeech() {
+        textToSpeech = new TextToSpeech(requireContext(), status -> {
+            if (status == TextToSpeech.SUCCESS && textToSpeech != null) {
+                textToSpeech.setLanguage(Locale.getDefault());
+                textToSpeech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                    @Override
+                    public void onStart(String utteranceId) {}
+
+                    @Override
+                    public void onDone(String utteranceId) {
+                        if (getActivity() != null) {
+                            getActivity().runOnUiThread(() -> {
+                                if (chatAdapter != null) {
+                                    chatAdapter.setCurrentlySpeakingPosition(-1);
+                                }
+                            });
+                        }
+                    }
+
+                    @Override
+                    public void onError(String utteranceId) {
+                        if (getActivity() != null) {
+                            getActivity().runOnUiThread(() -> {
+                                if (chatAdapter != null) {
+                                    chatAdapter.setCurrentlySpeakingPosition(-1);
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    private void setupStarterChips(View view) {
+        TextView chipSummarize = view.findViewById(R.id.chipSummarize);
+        TextView chipTasks = view.findViewById(R.id.chipTasks);
+        TextView chipPlan = view.findViewById(R.id.chipPlan);
+        TextView chipShopping = view.findViewById(R.id.chipShopping);
+
+        View.OnClickListener chipListener = v -> {
+            if (v instanceof TextView) {
+                String chipText = ((TextView) v).getText().toString();
+                String promptText = chipText.replaceFirst("^[\\p{So}\\p{Cn}\\s]+", "").trim();
+                editTextPrompt.setText(promptText);
+                buttonSend.performClick();
+            }
+        };
+        if (chipSummarize != null) chipSummarize.setOnClickListener(chipListener);
+        if (chipTasks != null) chipTasks.setOnClickListener(chipListener);
+        if (chipPlan != null) chipPlan.setOnClickListener(chipListener);
+        if (chipShopping != null) chipShopping.setOnClickListener(chipListener);
+    }
+
+    private void updateEmptyStateVisibility() {
+        if (layoutEmptyState != null) {
+            layoutEmptyState.setVisibility(chatHistory.isEmpty() ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private void toggleSpeech(ChatMessage message, int position) {
+        if (textToSpeech == null || getContext() == null) {
+            Toast.makeText(getContext(), "Text-to-Speech not ready", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (chatAdapter.getCurrentlySpeakingPosition() == position) {
+            textToSpeech.stop();
+            chatAdapter.setCurrentlySpeakingPosition(-1);
+            return;
+        }
+
+        textToSpeech.stop();
+        chatAdapter.setCurrentlySpeakingPosition(position);
+
+        String textToSpeak = stripMarkdownForSpeech(message.getContent());
+        if (TextUtils.isEmpty(textToSpeak)) {
+            chatAdapter.setCurrentlySpeakingPosition(-1);
+            return;
+        }
+
+        Bundle params = new Bundle();
+        params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "chat_msg_" + position);
+        textToSpeech.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, params, "chat_msg_" + position);
+    }
+
+    public static String stripMarkdownForSpeech(String md) {
+        if (md == null) return "";
+        String s = md;
+        s = s.replaceAll("(?s)```.*?```", "");
+        s = s.replaceAll("(?m)^#{1,6}\\s+", "");
+        s = s.replaceAll("\\*\\*(.*?)\\*\\*", "$1");
+        s = s.replaceAll("\\*(.*?)\\*", "$1");
+        s = s.replaceAll("__(.*?)__", "$1");
+        s = s.replaceAll("_(.*?)_", "$1");
+        s = s.replaceAll("`{1,3}(.*?)`{1,3}", "$1");
+        s = s.replaceAll("(?m)^\\s*[-*+]\\s+\\[[ xX]?\\]\\s*", "");
+        s = s.replaceAll("(?m)^\\s*[-*+]\\s+", "");
+        s = s.replaceAll("(?m)^\\s*\\d+\\.\\s+", "");
+        s = s.replaceAll("\\[([^\\]]+)\\]\\([^)]+\\)", "$1");
+        return s.trim();
+    }
+
+    private void copyToClipboard(String text) {
+        if (getContext() == null || TextUtils.isEmpty(text)) return;
+        ClipboardManager clipboard = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText("NotePilot AI", text);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(clip);
+            Toast.makeText(getContext(), "Copied to clipboard", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void saveResponseAsNote(String content) {
+        if (getContext() == null || TextUtils.isEmpty(content)) return;
+        String title = deriveTitleFromContent(content);
+        List<Note> notes = NotesStorage.loadNotes(getContext());
+        int[] noteColors = getResources().getIntArray(R.array.note_colors);
+        int randomColor = noteColors[new Random().nextInt(noteColors.length)];
+
+        Note newNote = new Note(title, content, randomColor);
+        notes.add(0, newNote);
+        NotesStorage.saveNotes(getContext(), notes);
+        Toast.makeText(getContext(), "Saved to Notes: " + title, Toast.LENGTH_SHORT).show();
+    }
+
+    private String deriveTitleFromContent(String content) {
+        if (content == null || content.trim().isEmpty()) return "AI Note";
+        String clean = stripMarkdownForSpeech(content).trim();
+        String firstLine = clean.split("\\R")[0].trim();
+        if (firstLine.length() > 35) {
+            firstLine = firstLine.substring(0, 35) + "...";
+        }
+        if (firstLine.isEmpty()) {
+            return "AI Note - " + new SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(new Date());
+        }
+        return firstLine;
+    }
+
+    private void exportChatHistory() {
+        if (chatHistory == null || chatHistory.isEmpty()) {
+            Toast.makeText(getContext(), "No chat history to export", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("NotePilot AI Conversation\n");
+        sb.append("Date: ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date())).append("\n");
+        sb.append("-------------------------------------------\n\n");
+
+        for (ChatMessage msg : chatHistory) {
+            String sender = msg.getAuthor() == ChatMessage.Author.USER ? "You" : "NotePilot AI";
+            sb.append("[").append(sender).append("]:\n");
+            sb.append(msg.getContent()).append("\n\n");
+        }
+
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "NotePilot AI Conversation");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, sb.toString());
+        startActivity(Intent.createChooser(shareIntent, "Share or Export Chat"));
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (textToSpeech != null) {
+            textToSpeech.stop();
+            textToSpeech.shutdown();
+            textToSpeech = null;
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (getContext() != null && PermissionStore.getLocationPermission(getContext())) {
+            requestLocationPermissionsIfNeeded();
+        } else {
+            latestLocationText = "";
+        }
+    }
+
     private void addToChatHistory(ChatMessage message) {
         chatHistory.add(message);
+        if (getContext() != null) {
+            ChatHistoryStorage.saveChatHistory(getContext(), chatHistory);
+        }
         chatAdapter.notifyItemInserted(chatHistory.size() - 1);
         chatRecyclerView.scrollToPosition(chatHistory.size() - 1);
+        updateEmptyStateVisibility();
+    }
+
+    private Note findNoteByTitle(String title) {
+        if (getContext() == null || title == null) return null;
+        String t = title.trim();
+        List<Note> notes = NotesStorage.loadNotes(getContext());
+        for (Note note : notes) {
+            if (note.getTitle() != null && note.getTitle().trim().equalsIgnoreCase(t)) {
+                return note;
+            }
+        }
+        return null;
     }
 
     private boolean doesNoteExist(String title) {
+        return findNoteByTitle(title) != null;
+    }
+
+    private boolean executeDeleteNote(String title) {
         if (getContext() == null || title == null) return false;
+        String target = title.trim();
         List<Note> notes = NotesStorage.loadNotes(getContext());
-        for (Note note : notes) {
-            if (note.getTitle() != null && title.trim().equalsIgnoreCase(note.getTitle().trim())) {
+        int removeIndex = -1;
+        for (int i = 0; i < notes.size(); i++) {
+            Note n = notes.get(i);
+            if (n.getTitle() != null && n.getTitle().trim().equalsIgnoreCase(target)) {
+                removeIndex = i;
+                break;
+            }
+        }
+        if (removeIndex != -1) {
+            notes.remove(removeIndex);
+            NotesStorage.saveNotes(getContext(), notes);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean executeSetNotePin(String title, boolean isPinned) {
+        if (getContext() == null || title == null) return false;
+        String target = title.trim();
+        List<Note> notes = NotesStorage.loadNotes(getContext());
+        for (Note n : notes) {
+            if (n.getTitle() != null && n.getTitle().trim().equalsIgnoreCase(target)) {
+                n.setPinned(isPinned);
+                NotesStorage.saveNotes(getContext(), notes);
                 return true;
             }
         }
         return false;
+    }
+
+    private String executeSearchNotes(String query) {
+        if (getContext() == null || query == null) return "[]";
+        String q = query.toLowerCase(Locale.getDefault()).trim();
+        List<Note> notes = NotesStorage.loadNotes(getContext());
+        JSONArray results = new JSONArray();
+        for (Note note : notes) {
+            boolean match = false;
+            if (note.getTitle() != null && note.getTitle().toLowerCase(Locale.getDefault()).contains(q)) {
+                match = true;
+            }
+            if (!match && !note.isChecklist() && note.getContent() != null && note.getContent().toLowerCase(Locale.getDefault()).contains(q)) {
+                match = true;
+            }
+            if (!match && note.isChecklist() && note.getChecklist() != null) {
+                for (ChecklistItem item : note.getChecklist()) {
+                    if (item.text != null && item.text.toLowerCase(Locale.getDefault()).contains(q)) {
+                        match = true;
+                        break;
+                    }
+                }
+            }
+            if (match) {
+                try {
+                    JSONObject obj = new JSONObject();
+                    obj.put("title", note.getTitle() != null ? note.getTitle() : "Untitled");
+                    obj.put("isPinned", note.isPinned());
+                    obj.put("isChecklist", note.isChecklist());
+                    if (note.isChecklist() && note.getChecklist() != null) {
+                        JSONArray itemsArray = new JSONArray();
+                        for (ChecklistItem ci : note.getChecklist()) {
+                            itemsArray.put((ci.checked ? "[x] " : "[ ] ") + (ci.text != null ? ci.text : ""));
+                        }
+                        obj.put("items", itemsArray);
+                    } else {
+                        String c = note.getContent() != null ? note.getContent() : "";
+                        if (c.length() > 300) {
+                            c = c.substring(0, 300) + "...";
+                        }
+                        obj.put("content", c);
+                    }
+                    results.put(obj);
+                } catch (JSONException ignored) {}
+            }
+        }
+        return results.toString();
     }
 
     private String cleanChecklistItemText(String line) {
@@ -444,31 +768,58 @@ public class ChatFragment extends Fragment {
         }
     }
 
-    private String extractErrorMessage(String responseBody, int statusCode) {
-        if (responseBody == null || responseBody.trim().isEmpty()) {
-            return "❌ Request failed (HTTP " + statusCode + ").";
-        }
+    public static String formatFriendlyErrorMessage(String responseBody, int statusCode) {
+        String baseMsg = "";
         try {
-            String clean = responseBody.trim();
-            JSONObject errObj = null;
-            if (clean.startsWith("[")) {
-                JSONArray arr = new JSONArray(clean);
-                if (arr.length() > 0) {
-                    JSONObject first = arr.getJSONObject(0);
-                    errObj = first.optJSONObject("error");
-                }
-            } else if (clean.startsWith("{")) {
-                JSONObject obj = new JSONObject(clean);
-                errObj = obj.optJSONObject("error");
-            }
-            if (errObj != null && errObj.has("message")) {
-                String msg = errObj.optString("message", "");
-                if (!msg.isEmpty()) {
-                    return "❌ Error (" + statusCode + "):\n" + msg;
+            if (responseBody != null && !responseBody.trim().isEmpty()) {
+                String clean = responseBody.trim();
+                Matcher matcher = Pattern.compile("\"message\"\\s*:\\s*\"([^\"]+)\"").matcher(clean);
+                if (matcher.find()) {
+                    baseMsg = matcher.group(1).replace("\\\"", "\"").replace("\\n", " ").trim();
+                } else {
+                    JSONObject errObj = null;
+                    if (clean.startsWith("[")) {
+                        JSONArray arr = new JSONArray(clean);
+                        if (arr.length() > 0) errObj = arr.getJSONObject(0).optJSONObject("error");
+                    } else if (clean.startsWith("{")) {
+                        JSONObject obj = new JSONObject(clean);
+                        errObj = obj.optJSONObject("error");
+                    }
+                    if (errObj != null && errObj.has("message")) {
+                        baseMsg = errObj.optString("message", "").trim();
+                    }
                 }
             }
         } catch (Exception ignored) {}
-        return "❌ Error (" + statusCode + "):\n" + responseBody;
+
+        if (statusCode == 401) {
+            String details = baseMsg.isEmpty() ? "" : "\n\n*Server Details:* " + baseMsg;
+            return "🔑 **Invalid API Key (HTTP 401)**\n\nYour Google Gemini API key was not recognized or has expired. Please open **Settings (⚙️)** to update your key.\n\n*Get a free API key at [aistudio.google.com](https://aistudio.google.com)*" + details;
+        } else if (statusCode == 403) {
+            String details = baseMsg.isEmpty() ? "" : "\n\n*Server Details:* " + baseMsg;
+            return "🚫 **Access Denied (HTTP 403)**\n\nYour API key does not have permission for this model or region. Check your API key in Google AI Studio or update it in **Settings (⚙️)**." + details;
+        } else if (statusCode == 404) {
+            String details = baseMsg.isEmpty() ? "" : "\n\n*Server Details:* " + baseMsg;
+            return "🔍 **Model Not Found (HTTP 404)**\n\nThe selected Gemini model is retired or unavailable. Please open **Settings (⚙️)** and select **Gemini 3.6 Flash**." + details;
+        } else if (statusCode == 429) {
+            String details = baseMsg.isEmpty() ? "" : "\n\n*Server Details:* " + baseMsg;
+            return "⏳ **Rate Limit Exceeded (HTTP 429)**\n\nYou've reached Google's free-tier request rate limit. Please wait a minute and try your question again." + details;
+        } else if (statusCode >= 500) {
+            String details = baseMsg.isEmpty() ? "" : "\n\n*Server Details:* " + baseMsg;
+            return "☁️ **Google AI Temporary Outage (HTTP " + statusCode + ")**\n\nGoogle's Gemini servers are temporarily busy or unreachable. Please try again in a few moments." + details;
+        }
+
+        if (!baseMsg.isEmpty()) {
+            return "❌ **Request Error (HTTP " + statusCode + ")**\n\n" + baseMsg;
+        }
+        if (responseBody != null && !responseBody.trim().isEmpty()) {
+            return "❌ **Request Failed (HTTP " + statusCode + ")**\n\n" + responseBody;
+        }
+        return "❌ **Request Failed (HTTP " + statusCode + ")**\n\nPlease check your network connection and Settings.";
+    }
+
+    private String extractErrorMessage(String responseBody, int statusCode) {
+        return formatFriendlyErrorMessage(responseBody, statusCode);
     }
 
     private void callGeminiWithNotes(String prompt) {
@@ -488,7 +839,10 @@ public class ChatFragment extends Fragment {
         }
         setLoading(true);
         String dateTimeInfo = getLocalDateTimeAndZone();
-        String locationInfo = latestLocationText;
+        String locationInfo = "";
+        if (getContext() != null && PermissionStore.getLocationPermission(getContext())) {
+            locationInfo = latestLocationText;
+        }
         String contextSnippet = "Device context: " + dateTimeInfo;
         if (locationInfo != null && !locationInfo.isEmpty()) {
             contextSnippet += "\nLocation (approx): " + locationInfo;
@@ -505,6 +859,8 @@ public class ChatFragment extends Fragment {
             jsonBody.put("max_tokens", 4096);
 
             JSONArray tools = new JSONArray();
+
+            // 1. addOrUpdateNote
             JSONObject noteTool = new JSONObject();
             noteTool.put("type", "function");
             JSONObject function = new JSONObject();
@@ -520,26 +876,79 @@ public class ChatFragment extends Fragment {
             parameters.put("required", new JSONArray().put("title").put("content"));
             function.put("parameters", parameters);
             noteTool.put("function", function);
-
             tools.put(noteTool);
+
+            // 2. searchNotes
+            JSONObject searchTool = new JSONObject();
+            searchTool.put("type", "function");
+            JSONObject searchFunc = new JSONObject();
+            searchFunc.put("name", "searchNotes");
+            searchFunc.put("description", "Search user's notes and checklists by keyword or query when the user asks to search or find specific notes.");
+            JSONObject searchParams = new JSONObject();
+            searchParams.put("type", "object");
+            JSONObject searchProps = new JSONObject();
+            searchProps.put("query", new JSONObject().put("type", "string").put("description", "The keyword or topic to search for in note titles and contents."));
+            searchParams.put("properties", searchProps);
+            searchParams.put("required", new JSONArray().put("query"));
+            searchFunc.put("parameters", searchParams);
+            searchTool.put("function", searchFunc);
+            tools.put(searchTool);
+
+            // 3. deleteNote
+            JSONObject deleteTool = new JSONObject();
+            deleteTool.put("type", "function");
+            JSONObject deleteFunc = new JSONObject();
+            deleteFunc.put("name", "deleteNote");
+            deleteFunc.put("description", "Delete an existing note or checklist by its title when the user explicitly asks to delete or remove it.");
+            JSONObject deleteParams = new JSONObject();
+            deleteParams.put("type", "object");
+            JSONObject deleteProps = new JSONObject();
+            deleteProps.put("title", new JSONObject().put("type", "string").put("description", "The title of the note to delete."));
+            deleteParams.put("properties", deleteProps);
+            deleteParams.put("required", new JSONArray().put("title"));
+            deleteFunc.put("parameters", deleteParams);
+            deleteTool.put("function", deleteFunc);
+            tools.put(deleteTool);
+
+            // 4. setNotePin
+            JSONObject pinTool = new JSONObject();
+            pinTool.put("type", "function");
+            JSONObject pinFunc = new JSONObject();
+            pinFunc.put("name", "setNotePin");
+            pinFunc.put("description", "Pin or unpin a note to/from the top of the notes list when the user asks to pin or unpin a note.");
+            JSONObject pinParams = new JSONObject();
+            pinParams.put("type", "object");
+            JSONObject pinProps = new JSONObject();
+            pinProps.put("title", new JSONObject().put("type", "string").put("description", "The title of the note to pin or unpin."));
+            pinProps.put("isPinned", new JSONObject().put("type", "boolean").put("description", "True to pin the note to the top, false to unpin it."));
+            pinParams.put("properties", pinProps);
+            pinParams.put("required", new JSONArray().put("title").put("isPinned"));
+            pinFunc.put("parameters", pinParams);
+            pinTool.put("function", pinFunc);
+            tools.put(pinTool);
+
             jsonBody.put("tools", tools);
             jsonBody.put("tool_choice", "auto");
 
             JSONObject systemMsg = new JSONObject();
             systemMsg.put("role", "system");
-            systemMsg.put("content", "You are a helpful personal assistant for notes.\n\n" +
-                    "Capabilities:\n" +
+            systemMsg.put("content", "You are a helpful personal assistant for NotePilot.\n\n" +
+                    "Capabilities & Tools:\n" +
                     "- You can freely read, summarize, analyze, compare, extract, and plan using the user's notes below.\n" +
-                    "- You can answer questions directly from the notes without using any tools.\n\n" +
-                    "Tool usage policy (strict):\n" +
-                    "- Only call the 'addOrUpdateNote' function when the user explicitly asks to add, create, edit, append, update, or modify a note, reminder, task, or birthday.\n" +
-                    "- Never call tools for summarization, explanation, Q&A, brainstorming, or planning.\n" +
-                    "- Do not claim that you cannot summarize or answer; you can and should answer directly using the notes context.\n" +
-                    "- If the user both requests an update and also asks for an answer/summary, call the tool to update and also provide the requested answer in your normal assistant message.\n" +
+                    "- You can answer questions directly from the notes context without using any tools.\n" +
+                    "- 'searchNotes': Search notes by keyword or query.\n" +
+                    "- 'addOrUpdateNote': Add or update note/checklist content when user asks to create, edit, or append.\n" +
+                    "- 'deleteNote': Delete a note when user explicitly asks to remove/delete a note.\n" +
+                    "- 'setNotePin': Pin or unpin a note when user asks to pin or unpin it.\n\n" +
+                    "Tool usage policy:\n" +
+                    "- Only call action tools ('addOrUpdateNote', 'deleteNote', 'setNotePin') when the user explicitly requests those actions.\n" +
+                    "- Call 'searchNotes' if the user specifically asks to search or locate notes that might have more details.\n" +
+                    "- Never call tools for simple summarization, explanation, Q&A, brainstorming, or general planning.\n" +
+                    "- If the user requests an action and also asks for an answer/summary, call the tool and provide the answer in the follow-up.\n" +
                     "- When proposing content to append, avoid duplicating what's already in the note; only include new unique items.\n\n" +
                     "Response style:\n" +
                     "- When answering, explicitly mention that you used the notes.\n" +
-                    "- If the relevant information is missing from notes, state that briefly and, if appropriate, ask a concise follow-up.\n\n" +
+                    "- If the relevant information is missing from notes, state that briefly.\n\n" +
                     "Here are the user's notes:\n" + notes + "\n\n" + contextSnippet);
             messagesArray.put(systemMsg);
 
@@ -623,24 +1032,8 @@ public class ChatFragment extends Fragment {
                                     arguments = new JSONObject(functionCall.getString("arguments"));
                                 }
 
-                                if (!"addOrUpdateNote".equals(functionName)) {
-                                    handleNormalReply(choice, message);
-                                    setLoading(false);
-                                    return;
-                                }
-
-                                final String title = arguments.optString("title", "").trim();
-                                final String content = arguments.optString("content", "").trim();
-                                final boolean isChecklist = arguments.optBoolean("isChecklist", false);
-                                final boolean isNewNote = !doesNoteExist(title);
                                 final String finalToolCallId = toolCallId;
                                 final String finalFunctionName = functionName;
-
-                                if (TextUtils.isEmpty(title) || TextUtils.isEmpty(content)) {
-                                    handleNormalReply(choice, message);
-                                    setLoading(false);
-                                    return;
-                                }
 
                                 final JSONObject assistantMsg = new JSONObject();
                                 assistantMsg.put("role", "assistant");
@@ -651,63 +1044,228 @@ public class ChatFragment extends Fragment {
                                 }
                                 assistantMsg.put("tool_calls", toolCalls);
 
-                                if (getContext() != null && PermissionStore.getEditPermission(getContext())) {
-                                    boolean created = addOrUpdateNote(title, content, isChecklist);
-                                    if (getActivity() != null) {
-                                        getActivity().runOnUiThread(() -> {
-                                            Toast.makeText(getContext(), (created ? "Note created" : "Note updated") + " by AI", Toast.LENGTH_SHORT).show();
-                                        });
-                                    }
-                                    JSONObject toolResult = new JSONObject();
-                                    toolResult.put("status", "success");
-                                    toolResult.put("action", created ? "created" : "updated");
-                                    toolResult.put("title", title);
-                                    toolResult.put("message", "Note '" + title + "' was successfully " + (created ? "created" : "updated") + ".");
-                                    sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
-                                } else {
-                                    if (getActivity() instanceof MainActivity) {
-                                        getActivity().runOnUiThread(() -> {
-                                            ((MainActivity) getActivity()).showAiChangeConfirmationDialog(
-                                                    title,
-                                                    content,
-                                                    isNewNote,
-                                                    () -> {
-                                                        new Thread(() -> {
-                                                            boolean created = addOrUpdateNote(title, content, isChecklist);
-                                                            if (getActivity() != null) {
-                                                                getActivity().runOnUiThread(() -> {
-                                                                    Toast.makeText(getContext(), (created ? "Note created" : "Note updated") + " by AI", Toast.LENGTH_SHORT).show();
-                                                                });
-                                                            }
-                                                            try {
-                                                                JSONObject toolResult = new JSONObject();
-                                                                toolResult.put("status", "success");
-                                                                toolResult.put("action", created ? "created" : "updated");
-                                                                toolResult.put("title", title);
-                                                                toolResult.put("message", "User approved the changes. Note '" + title + "' was successfully " + (created ? "created" : "updated") + ".");
-                                                                sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
-                                                            } catch (JSONException ignored) {
-                                                                setLoading(false);
-                                                            }
-                                                        }).start();
-                                                    },
-                                                    () -> {
-                                                        new Thread(() -> {
-                                                            try {
-                                                                JSONObject toolResult = new JSONObject();
-                                                                toolResult.put("status", "cancelled");
-                                                                toolResult.put("message", "User declined to allow this note modification. The note was not changed.");
-                                                                sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
-                                                            } catch (JSONException ignored) {
-                                                                setLoading(false);
-                                                            }
-                                                        }).start();
-                                                    }
-                                            );
-                                        });
-                                    } else {
+                                if ("searchNotes".equals(functionName)) {
+                                    String query = arguments.optString("query", "");
+                                    String searchResultJson = executeSearchNotes(query);
+                                    sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, searchResultJson);
+                                } else if ("deleteNote".equals(functionName)) {
+                                    final String title = arguments.optString("title", "").trim();
+                                    if (TextUtils.isEmpty(title)) {
+                                        handleNormalReply(choice, message);
                                         setLoading(false);
+                                        return;
                                     }
+                                    final Note noteToDelete = findNoteByTitle(title);
+                                    if (noteToDelete == null) {
+                                        JSONObject errResult = new JSONObject();
+                                        errResult.put("status", "error");
+                                        errResult.put("message", "Note '" + title + "' was not found.");
+                                        sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, errResult.toString());
+                                        return;
+                                    }
+
+                                    if (getContext() != null && PermissionStore.getEditPermission(getContext())) {
+                                        boolean deleted = executeDeleteNote(title);
+                                        if (getActivity() != null) {
+                                            getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Note '" + title + "' deleted by AI", Toast.LENGTH_SHORT).show());
+                                        }
+                                        JSONObject toolResult = new JSONObject();
+                                        toolResult.put("status", deleted ? "success" : "error");
+                                        toolResult.put("action", "deleted");
+                                        toolResult.put("title", title);
+                                        toolResult.put("message", deleted ? "Note '" + title + "' was successfully deleted." : "Failed to delete note '" + title + "'.");
+                                        sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                    } else {
+                                        if (getActivity() instanceof MainActivity) {
+                                            String preview = noteToDelete.isChecklist() ? "Checklist with " + (noteToDelete.getChecklist() != null ? noteToDelete.getChecklist().size() : 0) + " items" : (noteToDelete.getContent() != null ? noteToDelete.getContent() : "");
+                                            getActivity().runOnUiThread(() -> {
+                                                ((MainActivity) getActivity()).showAiChangeConfirmationDialog(
+                                                        "DELETE NOTE",
+                                                        title,
+                                                        "Are you sure you want to delete this note?\n\n" + preview,
+                                                        () -> {
+                                                            new Thread(() -> {
+                                                                boolean deleted = executeDeleteNote(title);
+                                                                if (getActivity() != null) {
+                                                                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), "Note '" + title + "' deleted by AI", Toast.LENGTH_SHORT).show());
+                                                                }
+                                                                try {
+                                                                    JSONObject toolResult = new JSONObject();
+                                                                    toolResult.put("status", deleted ? "success" : "error");
+                                                                    toolResult.put("action", "deleted");
+                                                                    toolResult.put("title", title);
+                                                                    toolResult.put("message", "User approved deleting note '" + title + "'. Note was deleted.");
+                                                                    sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                                                } catch (JSONException ignored) {
+                                                                    setLoading(false);
+                                                                }
+                                                            }).start();
+                                                        },
+                                                        () -> {
+                                                            new Thread(() -> {
+                                                                try {
+                                                                    JSONObject toolResult = new JSONObject();
+                                                                    toolResult.put("status", "cancelled");
+                                                                    toolResult.put("message", "User declined to delete note '" + title + "'. The note was not deleted.");
+                                                                    sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                                                } catch (JSONException ignored) {
+                                                                    setLoading(false);
+                                                                }
+                                                            }).start();
+                                                        }
+                                                );
+                                            });
+                                        } else {
+                                            setLoading(false);
+                                        }
+                                    }
+                                } else if ("setNotePin".equals(functionName)) {
+                                    final String title = arguments.optString("title", "").trim();
+                                    final boolean isPinned = arguments.optBoolean("isPinned", false);
+                                    if (TextUtils.isEmpty(title)) {
+                                        handleNormalReply(choice, message);
+                                        setLoading(false);
+                                        return;
+                                    }
+                                    final Note noteToPin = findNoteByTitle(title);
+                                    if (noteToPin == null) {
+                                        JSONObject errResult = new JSONObject();
+                                        errResult.put("status", "error");
+                                        errResult.put("message", "Note '" + title + "' was not found.");
+                                        sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, errResult.toString());
+                                        return;
+                                    }
+
+                                    if (getContext() != null && PermissionStore.getEditPermission(getContext())) {
+                                        boolean updated = executeSetNotePin(title, isPinned);
+                                        if (getActivity() != null) {
+                                            getActivity().runOnUiThread(() -> Toast.makeText(getContext(), (isPinned ? "Note pinned" : "Note unpinned") + " by AI", Toast.LENGTH_SHORT).show());
+                                        }
+                                        JSONObject toolResult = new JSONObject();
+                                        toolResult.put("status", updated ? "success" : "error");
+                                        toolResult.put("action", isPinned ? "pinned" : "unpinned");
+                                        toolResult.put("title", title);
+                                        toolResult.put("message", "Note '" + title + "' was successfully " + (isPinned ? "pinned" : "unpinned") + ".");
+                                        sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                    } else {
+                                        if (getActivity() instanceof MainActivity) {
+                                            String badge = isPinned ? "PIN NOTE" : "UNPIN NOTE";
+                                            String promptDesc = isPinned ? "Pin note '" + title + "' to top of the notes list?" : "Unpin note '" + title + "' from top of the notes list?";
+                                            getActivity().runOnUiThread(() -> {
+                                                ((MainActivity) getActivity()).showAiChangeConfirmationDialog(
+                                                        badge,
+                                                        title,
+                                                        promptDesc,
+                                                        () -> {
+                                                            new Thread(() -> {
+                                                                boolean updated = executeSetNotePin(title, isPinned);
+                                                                if (getActivity() != null) {
+                                                                    getActivity().runOnUiThread(() -> Toast.makeText(getContext(), (isPinned ? "Note pinned" : "Note unpinned") + " by AI", Toast.LENGTH_SHORT).show());
+                                                                }
+                                                                try {
+                                                                    JSONObject toolResult = new JSONObject();
+                                                                    toolResult.put("status", updated ? "success" : "error");
+                                                                    toolResult.put("action", isPinned ? "pinned" : "unpinned");
+                                                                    toolResult.put("title", title);
+                                                                    toolResult.put("message", "User approved pin change. Note '" + title + "' is now " + (isPinned ? "pinned" : "unpinned") + ".");
+                                                                    sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                                                } catch (JSONException ignored) {
+                                                                    setLoading(false);
+                                                                }
+                                                            }).start();
+                                                        },
+                                                        () -> {
+                                                            new Thread(() -> {
+                                                                try {
+                                                                    JSONObject toolResult = new JSONObject();
+                                                                    toolResult.put("status", "cancelled");
+                                                                    toolResult.put("message", "User declined to pin/unpin note '" + title + "'. Pin status was not changed.");
+                                                                    sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                                                } catch (JSONException ignored) {
+                                                                    setLoading(false);
+                                                                }
+                                                            }).start();
+                                                        }
+                                                );
+                                            });
+                                        } else {
+                                            setLoading(false);
+                                        }
+                                    }
+                                } else if ("addOrUpdateNote".equals(functionName)) {
+                                    final String title = arguments.optString("title", "").trim();
+                                    final String content = arguments.optString("content", "").trim();
+                                    final boolean isChecklist = arguments.optBoolean("isChecklist", false);
+                                    final boolean isNewNote = !doesNoteExist(title);
+
+                                    if (TextUtils.isEmpty(title) || TextUtils.isEmpty(content)) {
+                                        handleNormalReply(choice, message);
+                                        setLoading(false);
+                                        return;
+                                    }
+
+                                    if (getContext() != null && PermissionStore.getEditPermission(getContext())) {
+                                        boolean created = addOrUpdateNote(title, content, isChecklist);
+                                        if (getActivity() != null) {
+                                            getActivity().runOnUiThread(() -> {
+                                                Toast.makeText(getContext(), (created ? "Note created" : "Note updated") + " by AI", Toast.LENGTH_SHORT).show();
+                                            });
+                                        }
+                                        JSONObject toolResult = new JSONObject();
+                                        toolResult.put("status", "success");
+                                        toolResult.put("action", created ? "created" : "updated");
+                                        toolResult.put("title", title);
+                                        toolResult.put("message", "Note '" + title + "' was successfully " + (created ? "created" : "updated") + ".");
+                                        sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                    } else {
+                                        if (getActivity() instanceof MainActivity) {
+                                            final String actionBadge = isNewNote ? "CREATE NOTE" : "UPDATE NOTE";
+                                            getActivity().runOnUiThread(() -> {
+                                                ((MainActivity) getActivity()).showAiChangeConfirmationDialog(
+                                                        actionBadge,
+                                                        title,
+                                                        content,
+                                                        () -> {
+                                                            new Thread(() -> {
+                                                                boolean created = addOrUpdateNote(title, content, isChecklist);
+                                                                if (getActivity() != null) {
+                                                                    getActivity().runOnUiThread(() -> {
+                                                                        Toast.makeText(getContext(), (created ? "Note created" : "Note updated") + " by AI", Toast.LENGTH_SHORT).show();
+                                                                    });
+                                                                }
+                                                                try {
+                                                                    JSONObject toolResult = new JSONObject();
+                                                                    toolResult.put("status", "success");
+                                                                    toolResult.put("action", created ? "created" : "updated");
+                                                                    toolResult.put("title", title);
+                                                                    toolResult.put("message", "User approved the changes. Note '" + title + "' was successfully " + (created ? "created" : "updated") + ".");
+                                                                    sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                                                } catch (JSONException ignored) {
+                                                                    setLoading(false);
+                                                                }
+                                                            }).start();
+                                                        },
+                                                        () -> {
+                                                            new Thread(() -> {
+                                                                try {
+                                                                    JSONObject toolResult = new JSONObject();
+                                                                    toolResult.put("status", "cancelled");
+                                                                    toolResult.put("message", "User declined to allow this note modification. The note was not changed.");
+                                                                    sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                                                } catch (JSONException ignored) {
+                                                                    setLoading(false);
+                                                                }
+                                                            }).start();
+                                                        }
+                                                );
+                                            });
+                                        } else {
+                                            setLoading(false);
+                                        }
+                                    }
+                                } else {
+                                    handleNormalReply(choice, message);
+                                    setLoading(false);
                                 }
                             } else {
                                 handleNormalReply(choice, message);
@@ -766,7 +1324,7 @@ public class ChatFragment extends Fragment {
                 public void onFailure(Call call, IOException e) {
                     if (getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
-                            addToChatHistory(new ChatMessage("Note operation completed, but follow-up response timed out.", ChatMessage.Author.MODEL));
+                            addToChatHistory(new ChatMessage("Operation completed, but follow-up response timed out.", ChatMessage.Author.MODEL));
                             setLoading(false);
                         });
                     }
@@ -797,7 +1355,7 @@ public class ChatFragment extends Fragment {
                     } catch (JSONException e) {
                         if (getActivity() != null) {
                             getActivity().runOnUiThread(() -> {
-                                addToChatHistory(new ChatMessage("Note operation completed successfully.", ChatMessage.Author.MODEL));
+                                addToChatHistory(new ChatMessage("Operation completed successfully.", ChatMessage.Author.MODEL));
                             });
                         }
                     } finally {
@@ -860,6 +1418,10 @@ public class ChatFragment extends Fragment {
 
     private void requestLocationPermissionsIfNeeded() {
         if (getContext() == null) return;
+        if (!PermissionStore.getLocationPermission(getContext())) {
+            latestLocationText = "";
+            return;
+        }
         boolean fine = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean coarse = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         if (!fine && !coarse) {
@@ -870,10 +1432,14 @@ public class ChatFragment extends Fragment {
     }
 
     private void fetchLastLocationOnce() {
+        if (getContext() == null || !PermissionStore.getLocationPermission(getContext())) {
+            latestLocationText = "";
+            return;
+        }
         try {
             fusedLocationClient.getLastLocation()
                     .addOnSuccessListener(location -> {
-                        if (location != null) {
+                        if (location != null && getContext() != null && PermissionStore.getLocationPermission(getContext())) {
                             latestLocationText = formatLocationHumanReadable(location);
                         } else {
                             latestLocationText = "";

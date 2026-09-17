@@ -2,6 +2,7 @@ package com.example.myassistant;
 
 import android.content.Intent;
 import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
@@ -102,6 +103,7 @@ public class MainActivity extends AppCompatActivity {
         Spinner spinnerModel = view.findViewById(R.id.spinnerModel);
         android.widget.EditText editCustomModel = view.findViewById(R.id.editCustomModel);
         Switch editPermissionSwitch = view.findViewById(R.id.editPermissionSwitch);
+        Switch locationPermissionSwitch = view.findViewById(R.id.locationPermissionSwitch);
         android.widget.Button btnSave = view.findViewById(R.id.btnSave);
         android.widget.Button btnCancel = view.findViewById(R.id.btnCancel);
 
@@ -164,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         editPermissionSwitch.setChecked(PermissionStore.getEditPermission(this));
+        locationPermissionSwitch.setChecked(PermissionStore.getLocationPermission(this));
 
         android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
                 .setView(view)
@@ -201,7 +204,12 @@ public class MainActivity extends AppCompatActivity {
                 PermissionStore.setEditPermission(MainActivity.this, editPermissionSwitch.isChecked());
             }
 
-            if (keyChanged || modelChanged || permissionChanged) {
+            boolean locationChanged = locationPermissionSwitch.isChecked() != PermissionStore.getLocationPermission(MainActivity.this);
+            if (locationChanged) {
+                PermissionStore.setLocationPermission(MainActivity.this, locationPermissionSwitch.isChecked());
+            }
+
+            if (keyChanged || modelChanged || permissionChanged || locationChanged) {
                 Toast.makeText(MainActivity.this, "Settings saved", Toast.LENGTH_SHORT).show();
                 updateKeyStatus();
             } else {
@@ -215,7 +223,7 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
-    public void showAiChangeConfirmationDialog(String title, String content, boolean isNewNote, Runnable onAllowed, Runnable onCancelled) {
+    public void showAiChangeConfirmationDialog(String actionBadgeText, String title, String content, Runnable onAllowed, Runnable onCancelled) {
         android.view.LayoutInflater inflater = getLayoutInflater();
         View view = inflater.inflate(R.layout.dialog_ai_change_confirmation, null);
 
@@ -226,7 +234,12 @@ public class MainActivity extends AppCompatActivity {
         android.widget.Button btnCancel = view.findViewById(R.id.buttonCancel);
 
         if (badgeAction != null) {
-            badgeAction.setText(isNewNote ? "CREATE NOTE" : "UPDATE NOTE");
+            badgeAction.setText(actionBadgeText != null ? actionBadgeText : "UPDATE NOTE");
+            if ("DELETE NOTE".equalsIgnoreCase(actionBadgeText)) {
+                badgeAction.setBackgroundColor(Color.parseColor("#E53935"));
+            } else if ("PIN NOTE".equalsIgnoreCase(actionBadgeText) || "UNPIN NOTE".equalsIgnoreCase(actionBadgeText)) {
+                badgeAction.setBackgroundColor(Color.parseColor("#FF9800"));
+            }
         }
         if (targetNoteTitle != null) {
             targetNoteTitle.setText(title != null && !title.trim().isEmpty() ? title : "Untitled Note");
@@ -259,6 +272,10 @@ public class MainActivity extends AppCompatActivity {
         });
 
         dialog.show();
+    }
+
+    public void showAiChangeConfirmationDialog(String title, String content, boolean isNewNote, Runnable onAllowed, Runnable onCancelled) {
+        showAiChangeConfirmationDialog(isNewNote ? "CREATE NOTE" : "UPDATE NOTE", title, content, onAllowed, onCancelled);
     }
 
     public void showAiChangeConfirmationDialog(String title, String content, Runnable onAllowed) {
