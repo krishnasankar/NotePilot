@@ -1,18 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:padding="8dp"
     android:gravity="start">
 
-    <TextView
-        android:id="@+id/chat_message_content"
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:orientation="vertical"
         android:background="@drawable/chat_bubble_background"
-        android:padding="12dp"
-        android:textColor="@android:color/white"
-        android:textIsSelectable="true" />
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/chat_message_content"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:textIsSelectable="true" />
+
+        <LinearLayout
+            android:id="@+id/bubbleActionsRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <ImageButton
+                android:id="@+id/buttonSpeak"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_volume_up_24"
+                app:tint="#B3FFFFFF"
+                android:contentDescription="Read aloud"
+                android:padding="6dp"
+                android:layout_marginEnd="4dp" />
+
+            <ImageButton
+                android:id="@+id/buttonCopy"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_content_copy_24"
+                app:tint="#B3FFFFFF"
+                android:contentDescription="Copy response"
+                android:padding="6dp"
+                android:layout_marginEnd="4dp" />
+
+            <ImageButton
+                android:id="@+id/buttonSaveNote"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_add_24"
+                app:tint="#B3FFFFFF"
+                android:contentDescription="Save as note"
+                android:padding="6dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
 
 </LinearLayout>

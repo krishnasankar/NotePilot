@@ -1,33 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:padding="4dp">
+    android:paddingHorizontal="4dp"
+    android:paddingVertical="3dp">
 
-    <CheckBox
+    <com.google.android.material.checkbox.MaterialCheckBox
         android:id="@+id/checkBoxItem"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        app:buttonTint="@color/colorPrimary" />
 
     <EditText
         android:id="@+id/editTextItem"
         android:layout_width="0dp"
-        android:layout_weight="1"
         android:layout_height="wrap_content"
-        android:hint="Item"
-        android:inputType="textCapSentences"
+        android:layout_weight="1"
+        android:background="@null"
+        android:hint="@string/hint_checklist_item"
         android:imeOptions="actionDone"
-        android:background="@android:color/transparent"
+        android:inputType="textCapSentences"
+        android:paddingVertical="8dp"
+        android:paddingHorizontal="6dp"
         android:textColor="@color/textColorPrimary"
-        android:textColorHint="@color/textColorSecondary" />
+        android:textColorHint="@color/textColorTertiary"
+        android:textSize="15sp" />
 
     <ImageButton
         android:id="@+id/buttonDeleteItem"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:src="@drawable/ic_delete_24"
-        android:backgroundTint="@android:color/transparent"
-        android:contentDescription="Delete item" />
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Delete item"
+        android:padding="6dp"
+        android:src="@drawable/ic_close_24"
+        app:tint="@color/textColorTertiary" />
 
 </LinearLayout>

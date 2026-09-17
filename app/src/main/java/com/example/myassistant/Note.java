@@ -42,7 +42,14 @@ public Note(Note original) {
     this.id = original.id;
     this.title = original.title;
     this.content = original.content;
-    this.checklist = new ArrayList<>(original.checklist);
+    if (original.checklist != null) {
+        this.checklist = new ArrayList<>();
+        for (ChecklistItem item : original.checklist) {
+            this.checklist.add(new ChecklistItem(item.text, item.checked));
+        }
+    } else {
+        this.checklist = new ArrayList<>();
+    }
     this.isChecklist = original.isChecklist;
     this.color = original.color;
     this.lastModified = original.lastModified;
@@ -92,6 +99,11 @@ public void setChecklist(boolean checklist) {
 
     public int getColor() {
         return color;
+    }
+
+    public void setColor(int color) {
+        this.color = color;
+        this.lastModified = System.currentTimeMillis();
     }
 
     public long getLastModified() {

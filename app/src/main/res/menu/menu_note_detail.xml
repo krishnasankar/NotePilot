@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_ask_ai"
+        android:icon="@drawable/ic_chat_24"
+        android:title="@string/action_ask_ai"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_color"
+        android:icon="@drawable/ic_palette_24"
+        android:title="@string/action_note_color"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_delete"
+        android:icon="@drawable/ic_delete_24"
+        android:title="@string/delete"
+        app:showAsAction="ifRoom" />
+</menu>
