@@ -12,14 +12,28 @@ android {
         applicationId "com.example.myassistant"
         minSdk 21
         targetSdk 36
-        versionCode 3
-        versionName "2.1"
+        versionCode 4
+        versionName "3.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        release {
+            if (file('release.jks').exists()) {
+                storeFile file('release.jks')
+                storePassword 'notepilot123'
+                keyAlias 'notepilot'
+                keyPassword 'notepilot123'
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (file('release.jks').exists()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
