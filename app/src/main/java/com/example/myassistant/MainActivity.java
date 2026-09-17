@@ -1,10 +1,16 @@
 package com.example.myassistant;
 
+import android.content.Intent;
 import android.content.res.ColorStateList;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.ImageButton;
+import android.widget.Spinner;
 import android.widget.Switch;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -90,16 +96,72 @@ public class MainActivity extends AppCompatActivity {
         android.view.LayoutInflater inflater = getLayoutInflater();
         View view = inflater.inflate(R.layout.dialog_api_key, null);
 
+        TextView textHelpDescription = view.findViewById(R.id.textHelpDescription);
+        TextView btnGetKey = view.findViewById(R.id.btnGetKey);
         android.widget.EditText input = view.findViewById(R.id.editApiKey);
+        Spinner spinnerModel = view.findViewById(R.id.spinnerModel);
+        android.widget.EditText editCustomModel = view.findViewById(R.id.editCustomModel);
         Switch editPermissionSwitch = view.findViewById(R.id.editPermissionSwitch);
         android.widget.Button btnSave = view.findViewById(R.id.btnSave);
         android.widget.Button btnCancel = view.findViewById(R.id.btnCancel);
 
-        String existing = ApiKeyStore.getKey(this);
-        if (existing != null && !existing.isEmpty()) {
-            String masked = existing.length() > 8 ? "****" + existing.substring(existing.length() - 8) : "****";
+        textHelpDescription.setText(AiSettingsStore.getHelpDescription());
+        btnGetKey.setText("Get Free Gemini Key ↗");
+        btnGetKey.setOnClickListener(v -> {
+            try {
+                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(AiSettingsStore.HELP_URL_GEMINI));
+                startActivity(browserIntent);
+            } catch (Exception e) {
+                Toast.makeText(MainActivity.this, "Could not open browser: " + AiSettingsStore.HELP_URL_GEMINI, Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        input.setHint("AIza... or AQ....");
+        String existingKey = ApiKeyStore.getKey(this);
+        if (existingKey != null && !existingKey.isEmpty()) {
+            String masked = existingKey.length() > 8 ? "****" + existingKey.substring(existingKey.length() - 8) : "****";
             input.setText(masked);
+        } else {
+            input.setText("");
         }
+
+        String currentModel = AiSettingsStore.getModel(this);
+        int selectedModelIndex = 0;
+        boolean isPreset = false;
+        for (int i = 0; i < AiSettingsStore.GEMINI_MODEL_VALUES.length - 1; i++) {
+            if (AiSettingsStore.GEMINI_MODEL_VALUES[i].equalsIgnoreCase(currentModel)) {
+                selectedModelIndex = i;
+                isPreset = true;
+                break;
+            }
+        }
+        if (!isPreset && currentModel != null && !currentModel.trim().isEmpty()) {
+            selectedModelIndex = AiSettingsStore.GEMINI_DISPLAY_NAMES.length - 1;
+            editCustomModel.setText(currentModel);
+            editCustomModel.setVisibility(View.VISIBLE);
+        } else {
+            editCustomModel.setVisibility(View.GONE);
+        }
+
+        ArrayAdapter<String> modelAdapter = new ArrayAdapter<>(this, R.layout.item_model_spinner, AiSettingsStore.GEMINI_DISPLAY_NAMES);
+        modelAdapter.setDropDownViewResource(R.layout.item_model_spinner_dropdown);
+        spinnerModel.setAdapter(modelAdapter);
+        spinnerModel.setSelection(selectedModelIndex);
+
+        spinnerModel.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
+                if (position == AiSettingsStore.GEMINI_DISPLAY_NAMES.length - 1) {
+                    editCustomModel.setVisibility(View.VISIBLE);
+                    editCustomModel.requestFocus();
+                } else {
+                    editCustomModel.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
 
         editPermissionSwitch.setChecked(PermissionStore.getEditPermission(this));
 
@@ -118,14 +180,30 @@ public class MainActivity extends AppCompatActivity {
                 keyChanged = ApiKeyStore.saveKey(MainActivity.this, value);
             }
 
+            int selModel = spinnerModel.getSelectedItemPosition();
+            String chosenModel;
+            if (selModel == AiSettingsStore.GEMINI_DISPLAY_NAMES.length - 1) {
+                String custom = editCustomModel.getText().toString().trim();
+                chosenModel = custom.isEmpty() ? AiSettingsStore.DEFAULT_GEMINI_MODEL : custom;
+            } else if (selModel >= 0 && selModel < AiSettingsStore.GEMINI_MODEL_VALUES.length - 1) {
+                chosenModel = AiSettingsStore.GEMINI_MODEL_VALUES[selModel];
+            } else {
+                chosenModel = AiSettingsStore.DEFAULT_GEMINI_MODEL;
+            }
+
+            boolean modelChanged = !chosenModel.equals(AiSettingsStore.getModel(MainActivity.this));
+            if (modelChanged) {
+                AiSettingsStore.setModel(MainActivity.this, chosenModel);
+            }
+
             boolean permissionChanged = editPermissionSwitch.isChecked() != PermissionStore.getEditPermission(MainActivity.this);
             if (permissionChanged) {
                 PermissionStore.setEditPermission(MainActivity.this, editPermissionSwitch.isChecked());
             }
 
-            if (keyChanged || permissionChanged) {
+            if (keyChanged || modelChanged || permissionChanged) {
                 Toast.makeText(MainActivity.this, "Settings saved", Toast.LENGTH_SHORT).show();
-                if (keyChanged) updateKeyStatus();
+                updateKeyStatus();
             } else {
                 Toast.makeText(MainActivity.this, "No changes saved", Toast.LENGTH_SHORT).show();
             }
@@ -137,15 +215,29 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
-    public void showAiChangeConfirmationDialog(String title, String content, Runnable onAllowed) {
+    public void showAiChangeConfirmationDialog(String title, String content, boolean isNewNote, Runnable onAllowed, Runnable onCancelled) {
         android.view.LayoutInflater inflater = getLayoutInflater();
         View view = inflater.inflate(R.layout.dialog_ai_change_confirmation, null);
 
+        TextView badgeAction = view.findViewById(R.id.badgeAction);
+        TextView targetNoteTitle = view.findViewById(R.id.targetNoteTitle);
+        TextView contentPreview = view.findViewById(R.id.contentPreview);
         android.widget.Button btnAllow = view.findViewById(R.id.buttonAllow);
         android.widget.Button btnCancel = view.findViewById(R.id.buttonCancel);
 
+        if (badgeAction != null) {
+            badgeAction.setText(isNewNote ? "CREATE NOTE" : "UPDATE NOTE");
+        }
+        if (targetNoteTitle != null) {
+            targetNoteTitle.setText(title != null && !title.trim().isEmpty() ? title : "Untitled Note");
+        }
+        if (contentPreview != null) {
+            contentPreview.setText(content != null ? content : "");
+        }
+
         android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
                 .setView(view)
+                .setCancelable(true)
                 .create();
 
         if (dialog.getWindow() != null) {
@@ -153,12 +245,23 @@ public class MainActivity extends AppCompatActivity {
         }
 
         btnAllow.setOnClickListener(v -> {
-            onAllowed.run();
             dialog.dismiss();
+            if (onAllowed != null) onAllowed.run();
         });
 
-        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnCancel.setOnClickListener(v -> {
+            dialog.dismiss();
+            if (onCancelled != null) onCancelled.run();
+        });
+
+        dialog.setOnCancelListener(d -> {
+            if (onCancelled != null) onCancelled.run();
+        });
 
         dialog.show();
+    }
+
+    public void showAiChangeConfirmationDialog(String title, String content, Runnable onAllowed) {
+        showAiChangeConfirmationDialog(title, content, false, onAllowed, null);
     }
 }

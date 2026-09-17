@@ -45,6 +45,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -64,7 +65,6 @@ import okhttp3.Response;
 
 public class ChatFragment extends Fragment {
 
-    private static final String OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
     private EditText editTextPrompt;
     private ImageButton buttonSend;
     private ProgressBar progressBar;
@@ -152,7 +152,7 @@ public class ChatFragment extends Fragment {
             }
             editTextPrompt.setText("");
             addToChatHistory(new ChatMessage(prompt, ChatMessage.Author.USER));
-            callOpenRouterWithNotes(prompt);
+            callGeminiWithNotes(prompt);
         });
 
         buttonVoice.setOnClickListener(v -> {
@@ -187,30 +187,126 @@ public class ChatFragment extends Fragment {
         chatRecyclerView.scrollToPosition(chatHistory.size() - 1);
     }
 
-private boolean addOrUpdateNote(String title, String content) {
+    private boolean doesNoteExist(String title) {
+        if (getContext() == null || title == null) return false;
+        List<Note> notes = NotesStorage.loadNotes(getContext());
+        for (Note note : notes) {
+            if (note.getTitle() != null && title.trim().equalsIgnoreCase(note.getTitle().trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String cleanChecklistItemText(String line) {
+        if (line == null) return "";
+        String t = line.trim();
+        t = t.replaceAll("^[\\s*+-]*\\[[ xX]?\\]\\s*", "");
+        t = t.replaceAll("^[\\s*+-]+\\s*", "");
+        t = t.replaceAll("^\\d+[.)]\\s*", "");
+        return t.trim();
+    }
+
+    private List<ChecklistItem> parseChecklistItems(String content) {
+        List<ChecklistItem> items = new ArrayList<>();
+        if (content == null) return items;
+        String[] lines = content.split("\\R");
+        for (String line : lines) {
+            String clean = cleanChecklistItemText(line);
+            if (!clean.isEmpty()) {
+                items.add(new ChecklistItem(clean, false));
+            }
+        }
+        return items;
+    }
+
+    private void mergeChecklistItems(Note note, String incomingContent) {
+        List<ChecklistItem> currentList = note.getChecklist();
+        if (currentList == null) {
+            currentList = new ArrayList<>();
+            note.setChecklist(currentList);
+        }
+
+        LinkedHashSet<String> existingNormalized = new LinkedHashSet<>();
+        for (ChecklistItem item : currentList) {
+            if (item.text != null && !item.text.trim().isEmpty()) {
+                existingNormalized.add(normalizeForCompare(item.text));
+            }
+        }
+
+        String[] lines = incomingContent.split("\\R");
+        for (String line : lines) {
+            String clean = cleanChecklistItemText(line);
+            if (!clean.isEmpty()) {
+                String norm = normalizeForCompare(clean);
+                if (!existingNormalized.contains(norm)) {
+                    existingNormalized.add(norm);
+                    currentList.add(new ChecklistItem(clean, false));
+                }
+            }
+        }
+    }
+
+    private boolean isLikelyChecklist(String title, String content) {
+        String lowerTitle = (title != null ? title : "").toLowerCase(Locale.getDefault());
+        if (lowerTitle.contains("list") || lowerTitle.contains("todo") || lowerTitle.contains("checklist") || lowerTitle.contains("tasks") || lowerTitle.contains("shopping") || lowerTitle.contains("groceries")) {
+            return true;
+        }
+        if (content != null) {
+            String[] lines = content.split("\\R");
+            int markerCount = 0;
+            for (String line : lines) {
+                String t = line.trim();
+                if (t.startsWith("- [ ]") || t.startsWith("- [x]") || t.startsWith("* [ ]") || t.startsWith("- ") || t.startsWith("* ")) {
+                    markerCount++;
+                }
+            }
+            return markerCount >= 2;
+        }
+        return false;
+    }
+
+    private boolean addOrUpdateNote(String title, String content, boolean isChecklistRequested) {
         if (getContext() == null) return false;
         if (title != null) title = title.trim();
         if (content != null) content = content.trim();
         if (TextUtils.isEmpty(title) || TextUtils.isEmpty(content)) return false;
 
         List<Note> notes = NotesStorage.loadNotes(getContext());
-        boolean noteExists = false;
+        Note targetNote = null;
         for (Note note : notes) {
-            if (title.equalsIgnoreCase(note.getTitle())) {
-                String existingContent = note.getContent();
-                String merged = mergeNoteContent(existingContent == null ? "" : existingContent, content);
-                note.setContent(merged);
-                noteExists = true;
+            if (note.getTitle() != null && title.equalsIgnoreCase(note.getTitle().trim())) {
+                targetNote = note;
                 break;
             }
         }
-        if (!noteExists) {
+
+        boolean isNew = (targetNote == null);
+
+        if (targetNote != null) {
+            if (targetNote.isChecklist()) {
+                mergeChecklistItems(targetNote, content);
+            } else {
+                String existingContent = targetNote.getContent();
+                targetNote.setContent(mergeNoteContent(existingContent == null ? "" : existingContent, content));
+            }
+            targetNote.setLastModified(System.currentTimeMillis());
+        } else {
             int[] noteColors = getResources().getIntArray(R.array.note_colors);
             int randomColor = noteColors[new Random().nextInt(noteColors.length)];
-            notes.add(new Note(title, content, randomColor));
+
+            boolean shouldBeChecklist = isChecklistRequested || isLikelyChecklist(title, content);
+            if (shouldBeChecklist) {
+                List<ChecklistItem> items = parseChecklistItems(content);
+                targetNote = new Note(title, items, randomColor);
+            } else {
+                targetNote = new Note(title, content, randomColor);
+            }
+            notes.add(targetNote);
         }
+
         NotesStorage.saveNotes(getContext(), notes);
-        return !noteExists;
+        return isNew;
     }
 
     private String mergeNoteContent(String existing, String incoming) {
@@ -260,11 +356,64 @@ private boolean addOrUpdateNote(String title, String content) {
 
     private String normalizeForCompare(String s) {
         if (s == null) return "";
-        String out = s.replaceAll("[\\s\\u00A0]+", " ").trim(); // collapse whitespace including NBSP
+        String out = s.replaceAll("[\\s\\u00A0]+", " ").trim();
         out = out.replaceAll("[\\p{Z}]+", " ");
-        out = out.replaceAll("\\s*([,.;:!?])\\s*", "$1"); // normalize spaces around punctuation
+        out = out.replaceAll("\\s*([,.;:!?])\\s*", "$1");
         out = out.toLowerCase(Locale.getDefault());
         return out;
+    }
+
+    private String buildNotesContext(List<Note> notesList, int maxChars) {
+        if (notesList == null || notesList.isEmpty()) {
+            return "No notes found.";
+        }
+
+        List<Note> sortedNotes = new ArrayList<>(notesList);
+        Collections.sort(sortedNotes, (n1, n2) -> {
+            if (n1.isPinned() && !n2.isPinned()) return -1;
+            if (!n1.isPinned() && n2.isPinned()) return 1;
+            if (n1.isPinned() && n2.isPinned()) return Long.compare(n2.getPinnedTimestamp(), n1.getPinnedTimestamp());
+            return Long.compare(n2.getLastModified(), n1.getLastModified());
+        });
+
+        StringBuilder notesContent = new StringBuilder();
+        boolean notesOmitted = false;
+
+        for (Note note : sortedNotes) {
+            boolean hasTitle = note.getTitle() != null && !note.getTitle().trim().isEmpty();
+            StringBuilder noteBlock = new StringBuilder();
+            noteBlock.append("--- Start of Note ---\n");
+            noteBlock.append("Title: ").append(hasTitle ? note.getTitle() : "No Title").append("\n");
+            if (note.isPinned()) {
+                noteBlock.append("Pinned: Yes\n");
+            }
+            if (note.isChecklist()) {
+                noteBlock.append("Type: Checklist\n");
+                noteBlock.append("Items:\n");
+                if (note.getChecklist() != null) {
+                    for (ChecklistItem item : note.getChecklist()) {
+                        noteBlock.append("- ").append(item.text).append(" (").append(item.checked ? "checked" : "unchecked").append(")\n");
+                    }
+                }
+            } else if (note.getContent() != null && !note.getContent().trim().isEmpty()) {
+                noteBlock.append("Type: Text\n");
+                noteBlock.append("Content:\n").append(note.getContent()).append("\n");
+            }
+            noteBlock.append("--- End of Note ---\n\n");
+
+            if (notesContent.length() + noteBlock.length() <= maxChars) {
+                notesContent.append(noteBlock);
+            } else {
+                notesOmitted = true;
+                break;
+            }
+        }
+
+        if (notesOmitted) {
+            notesContent.append("[Notice: Additional older notes were omitted from context to preserve token limits.]\n\n");
+        }
+
+        return notesContent.toString();
     }
 
     private void setLoading(boolean loading) {
@@ -276,14 +425,63 @@ private boolean addOrUpdateNote(String title, String content) {
         }
     }
 
-    private void callOpenRouterWithNotes(String prompt) {
+    private void handleNormalReply(JSONObject choice, JSONObject message) {
+        String reply = message.optString("content", "").trim();
+        if (reply.isEmpty() && message.has("reasoning")) {
+            reply = message.optString("reasoning", "").trim();
+        }
+        if (reply.isEmpty() && choice != null && choice.has("reasoning")) {
+            reply = choice.optString("reasoning", "").trim();
+        }
+        if (reply.isEmpty()) {
+            reply = "[Model returned empty content.]";
+        }
+        final String finalReply = reply;
+        if (getActivity() != null) {
+            getActivity().runOnUiThread(() -> {
+                addToChatHistory(new ChatMessage(finalReply, ChatMessage.Author.MODEL));
+            });
+        }
+    }
+
+    private String extractErrorMessage(String responseBody, int statusCode) {
+        if (responseBody == null || responseBody.trim().isEmpty()) {
+            return "❌ Request failed (HTTP " + statusCode + ").";
+        }
+        try {
+            String clean = responseBody.trim();
+            JSONObject errObj = null;
+            if (clean.startsWith("[")) {
+                JSONArray arr = new JSONArray(clean);
+                if (arr.length() > 0) {
+                    JSONObject first = arr.getJSONObject(0);
+                    errObj = first.optJSONObject("error");
+                }
+            } else if (clean.startsWith("{")) {
+                JSONObject obj = new JSONObject(clean);
+                errObj = obj.optJSONObject("error");
+            }
+            if (errObj != null && errObj.has("message")) {
+                String msg = errObj.optString("message", "");
+                if (!msg.isEmpty()) {
+                    return "❌ Error (" + statusCode + "):\n" + msg;
+                }
+            }
+        } catch (Exception ignored) {}
+        return "❌ Error (" + statusCode + "):\n" + responseBody;
+    }
+
+    private void callGeminiWithNotes(String prompt) {
         if (getContext() == null) return;
-        String apiKey = ApiKeyStore.getKey(getContext());
+        final String endpoint = AiSettingsStore.getActiveEndpoint(getContext());
+        final String model = AiSettingsStore.getActiveModel(getContext());
+        final String apiKey = ApiKeyStore.getKey(getContext());
+
         if (apiKey == null || apiKey.trim().isEmpty()) {
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     setLoading(false);
-                    Toast.makeText(getContext(), "Please set your OpenRouter API key (Settings)", Toast.LENGTH_LONG).show();
+                    Toast.makeText(getContext(), "Please set your Google Gemini API key in Settings (get a free key at aistudio.google.com)", Toast.LENGTH_LONG).show();
                 });
             }
             return;
@@ -295,59 +493,41 @@ private boolean addOrUpdateNote(String title, String content) {
         if (locationInfo != null && !locationInfo.isEmpty()) {
             contextSnippet += "\nLocation (approx): " + locationInfo;
         }
+
         List<Note> notesList = NotesStorage.loadNotes(getContext());
-        StringBuilder notesContent = new StringBuilder();
-        if (notesList != null && !notesList.isEmpty()) {
-            for (Note note : notesList) {
-                boolean hasTitle = note.getTitle() != null && !note.getTitle().trim().isEmpty();
-                notesContent.append("--- Start of Note ---\n");
-                notesContent.append("Title: ").append(hasTitle ? note.getTitle(): "No Title").append("\n");
-                if (note.isChecklist()) {
-                    notesContent.append("Type: Checklist\n");
-                    notesContent.append("Items:\n");
-                    for (ChecklistItem item : note.getChecklist()) {
-                        notesContent.append("- ").append(item.text).append(" (").append(item.checked ? "checked" : "unchecked").append(")\n");
-                    }
-                } else if (note.getContent() != null && !note.getContent().trim().isEmpty()) {
-                    notesContent.append("Type: Text\n");
-                    notesContent.append("Content:\n").append(note.getContent()).append("\n");
-                }
-                notesContent.append("--- End of Note ---\n\n");
-            }
-        }
-        String notes = notesContent.toString();
-        int maxNotesChars = 4000;
-        if (notes.length() > maxNotesChars) {
-            notes = notes.substring(notes.length() - maxNotesChars);
-        }
+        String notes = buildNotesContext(notesList, 15000);
+
         JSONObject jsonBody = new JSONObject();
+        JSONArray messagesArray = new JSONArray();
         try {
-jsonBody.put("model", "arcee-ai/trinity-mini:free");
+            jsonBody.put("model", model);
             jsonBody.put("temperature", 0.3);
             jsonBody.put("max_tokens", 4096);
+
             JSONArray tools = new JSONArray();
             JSONObject noteTool = new JSONObject();
             noteTool.put("type", "function");
             JSONObject function = new JSONObject();
             function.put("name", "addOrUpdateNote");
-function.put("description", "Add or update a note ONLY when the user explicitly asks to add/create/edit/append/update a note, reminder, task, or birthday. Do not use this for summarization, explanation, or Q&A. Avoid duplicating existing content; append only new unique items.");
+            function.put("description", "Add or update a note ONLY when the user explicitly asks to add/create/edit/append/update a note, reminder, task, checklist, or birthday. Avoid duplicating existing content; append only new unique items.");
             JSONObject parameters = new JSONObject();
             parameters.put("type", "object");
             JSONObject properties = new JSONObject();
             properties.put("title", new JSONObject().put("type", "string").put("description", "The title of the note. If the user asks to add a reminder, task, or birthday, this should be 'Reminders', 'Tasks', or 'Birthdays' respectively."));
-            properties.put("content", new JSONObject().put("type", "string").put("description", "The content to be added to the note. This will be appended if the note already exists."));
-parameters.put("properties", properties);
+            properties.put("content", new JSONObject().put("type", "string").put("description", "The content to be added to the note. For checklists or to-do lists, separate each item with a newline."));
+            properties.put("isChecklist", new JSONObject().put("type", "boolean").put("description", "Set to true if this is a checklist, to-do list, grocery list, or task list."));
+            parameters.put("properties", properties);
             parameters.put("required", new JSONArray().put("title").put("content"));
             function.put("parameters", parameters);
             noteTool.put("function", function);
 
             tools.put(noteTool);
-jsonBody.put("tools", tools);
+            jsonBody.put("tools", tools);
             jsonBody.put("tool_choice", "auto");
-            JSONArray messagesArray = new JSONArray();
+
             JSONObject systemMsg = new JSONObject();
             systemMsg.put("role", "system");
-systemMsg.put("content", "You are a helpful personal assistant for notes.\n\n" +
+            systemMsg.put("content", "You are a helpful personal assistant for notes.\n\n" +
                     "Capabilities:\n" +
                     "- You can freely read, summarize, analyze, compare, extract, and plan using the user's notes below.\n" +
                     "- You can answer questions directly from the notes without using any tools.\n\n" +
@@ -363,14 +543,12 @@ systemMsg.put("content", "You are a helpful personal assistant for notes.\n\n" +
                     "Here are the user's notes:\n" + notes + "\n\n" + contextSnippet);
             messagesArray.put(systemMsg);
 
-
             for (ChatMessage message : chatHistory) {
                 JSONObject chatMessage = new JSONObject();
                 chatMessage.put("role", message.getAuthor() == ChatMessage.Author.USER ? "user" : "assistant");
                 chatMessage.put("content", message.getContent());
                 messagesArray.put(chatMessage);
             }
-
 
             jsonBody.put("messages", messagesArray);
         } catch (JSONException e) {
@@ -381,15 +559,15 @@ systemMsg.put("content", "You are a helpful personal assistant for notes.\n\n" +
             }
             return;
         }
+
         RequestBody body = RequestBody.create(jsonBody.toString(), JSON);
         Request request = new Request.Builder()
-                .url(OPENROUTER_URL)
+                .url(endpoint)
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
-                .header("HTTP-Referer", "https://your-app-or-domain.com")
-                .header("X-Title", "Notes Agent Android")
                 .post(body)
                 .build();
+
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
@@ -411,7 +589,7 @@ systemMsg.put("content", "You are a helpful personal assistant for notes.\n\n" +
             public void onResponse(Call call, Response response) throws IOException {
                 String responseBody = response.body() != null ? response.body().string() : "";
                 if (!response.isSuccessful()) {
-                    final String err = "❌ Error:\n" + responseBody;
+                    final String err = extractErrorMessage(responseBody, response.code());
                     if (getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
                             addToChatHistory(new ChatMessage(err, ChatMessage.Author.MODEL));
@@ -427,80 +605,209 @@ systemMsg.put("content", "You are a helpful personal assistant for notes.\n\n" +
                         JSONObject choice = choices.getJSONObject(0);
                         JSONObject message = choice.optJSONObject("message");
                         if (message != null) {
-                        if (message.has("tool_calls")) {
+                            if (message.has("tool_calls")) {
                                 JSONArray toolCalls = message.getJSONArray("tool_calls");
-                                boolean executedUpdate = false;
-                                for (int i = 0; i < toolCalls.length(); i++) {
-                                    JSONObject toolCall = toolCalls.getJSONObject(i);
-                                    if ("function".equals(toolCall.getString("type"))) {
-                                        JSONObject functionCall = toolCall.getJSONObject("function");
-                                        String functionName = functionCall.getString("name");
-                                        if ("addOrUpdateNote".equals(functionName)) {
-                                            if (executedUpdate) continue;
-                                            executedUpdate = true;
-                                            JSONObject arguments = new JSONObject(functionCall.getString("arguments"));
-                                            final String title = arguments.optString("title", null);
-                                            final String content = arguments.optString("content", null);
-                                            if (title != null && content != null) {
-                                                if (getActivity() != null) {
-                                                    getActivity().runOnUiThread(() -> {
-                                                        if (getContext() != null && PermissionStore.getEditPermission(getContext())) {
-                                                            boolean created = addOrUpdateNote(title, content);
-                                                            String summary = (created ? "I have created a new note titled '" : "I have updated the note titled '") + title + "'.";
-                                                            addToChatHistory(new ChatMessage(summary, ChatMessage.Author.MODEL));
-                                                            Toast.makeText(getContext(), "Note updated by AI", Toast.LENGTH_SHORT).show();
-                                                        } else {
-                                                            if (getActivity() instanceof MainActivity) {
-                                                                ((MainActivity) getActivity()).showAiChangeConfirmationDialog(title, content, () -> {
-                                                                    boolean created = addOrUpdateNote(title, content);
-                                                                    String summary = (created ? "I have created a new note titled '" : "I have updated the note titled '") + title + "'.";
-                                                                    addToChatHistory(new ChatMessage(summary, ChatMessage.Author.MODEL));
-                                                                    Toast.makeText(getContext(), "Note updated by AI", Toast.LENGTH_SHORT).show();
+                                if (toolCalls.length() == 0) {
+                                    handleNormalReply(choice, message);
+                                    setLoading(false);
+                                    return;
+                                }
+
+                                JSONObject toolCall = toolCalls.getJSONObject(0);
+                                String functionName = "";
+                                JSONObject arguments = new JSONObject();
+                                String toolCallId = toolCall.optString("id", "call_1");
+                                if ("function".equals(toolCall.getString("type"))) {
+                                    JSONObject functionCall = toolCall.getJSONObject("function");
+                                    functionName = functionCall.getString("name");
+                                    arguments = new JSONObject(functionCall.getString("arguments"));
+                                }
+
+                                if (!"addOrUpdateNote".equals(functionName)) {
+                                    handleNormalReply(choice, message);
+                                    setLoading(false);
+                                    return;
+                                }
+
+                                final String title = arguments.optString("title", "").trim();
+                                final String content = arguments.optString("content", "").trim();
+                                final boolean isChecklist = arguments.optBoolean("isChecklist", false);
+                                final boolean isNewNote = !doesNoteExist(title);
+                                final String finalToolCallId = toolCallId;
+                                final String finalFunctionName = functionName;
+
+                                if (TextUtils.isEmpty(title) || TextUtils.isEmpty(content)) {
+                                    handleNormalReply(choice, message);
+                                    setLoading(false);
+                                    return;
+                                }
+
+                                final JSONObject assistantMsg = new JSONObject();
+                                assistantMsg.put("role", "assistant");
+                                if (message.has("content") && !message.isNull("content")) {
+                                    assistantMsg.put("content", message.getString("content"));
+                                } else {
+                                    assistantMsg.put("content", JSONObject.NULL);
+                                }
+                                assistantMsg.put("tool_calls", toolCalls);
+
+                                if (getContext() != null && PermissionStore.getEditPermission(getContext())) {
+                                    boolean created = addOrUpdateNote(title, content, isChecklist);
+                                    if (getActivity() != null) {
+                                        getActivity().runOnUiThread(() -> {
+                                            Toast.makeText(getContext(), (created ? "Note created" : "Note updated") + " by AI", Toast.LENGTH_SHORT).show();
+                                        });
+                                    }
+                                    JSONObject toolResult = new JSONObject();
+                                    toolResult.put("status", "success");
+                                    toolResult.put("action", created ? "created" : "updated");
+                                    toolResult.put("title", title);
+                                    toolResult.put("message", "Note '" + title + "' was successfully " + (created ? "created" : "updated") + ".");
+                                    sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                } else {
+                                    if (getActivity() instanceof MainActivity) {
+                                        getActivity().runOnUiThread(() -> {
+                                            ((MainActivity) getActivity()).showAiChangeConfirmationDialog(
+                                                    title,
+                                                    content,
+                                                    isNewNote,
+                                                    () -> {
+                                                        new Thread(() -> {
+                                                            boolean created = addOrUpdateNote(title, content, isChecklist);
+                                                            if (getActivity() != null) {
+                                                                getActivity().runOnUiThread(() -> {
+                                                                    Toast.makeText(getContext(), (created ? "Note created" : "Note updated") + " by AI", Toast.LENGTH_SHORT).show();
                                                                 });
                                                             }
-                                                        }
-                                                    });
-                                                }
-                                            }
-                                        }
+                                                            try {
+                                                                JSONObject toolResult = new JSONObject();
+                                                                toolResult.put("status", "success");
+                                                                toolResult.put("action", created ? "created" : "updated");
+                                                                toolResult.put("title", title);
+                                                                toolResult.put("message", "User approved the changes. Note '" + title + "' was successfully " + (created ? "created" : "updated") + ".");
+                                                                sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                                            } catch (JSONException ignored) {
+                                                                setLoading(false);
+                                                            }
+                                                        }).start();
+                                                    },
+                                                    () -> {
+                                                        new Thread(() -> {
+                                                            try {
+                                                                JSONObject toolResult = new JSONObject();
+                                                                toolResult.put("status", "cancelled");
+                                                                toolResult.put("message", "User declined to allow this note modification. The note was not changed.");
+                                                                sendToolFollowUp(apiKey, endpoint, model, messagesArray, assistantMsg, finalToolCallId, finalFunctionName, toolResult.toString());
+                                                            } catch (JSONException ignored) {
+                                                                setLoading(false);
+                                                            }
+                                                        }).start();
+                                                    }
+                                            );
+                                        });
+                                    } else {
+                                        setLoading(false);
                                     }
                                 }
                             } else {
-                                String reply = message.optString("content", "").trim();
-                                if (reply.isEmpty() && message.has("reasoning")) {
-                                    reply = message.optString("reasoning", "").trim();
-                                }
-                                if (reply.isEmpty() && choice.has("reasoning")) {
-                                    reply = choice.optString("reasoning", "").trim();
-                                }
-                                if (reply.isEmpty()) {
-                                    reply = "[Model returned empty content.]";
-                                }
-                                final String finalReply = reply;
-                                if (getActivity() != null) {
-                                    getActivity().runOnUiThread(() -> {
-                                        addToChatHistory(new ChatMessage(finalReply, ChatMessage.Author.MODEL));
-                                    });
-                                }
+                                handleNormalReply(choice, message);
+                                setLoading(false);
                             }
+                        } else {
+                            setLoading(false);
                         }
+                    } else {
+                        setLoading(false);
                     }
                 } catch (JSONException e) {
                     final String errorReply = "Response parse failed:\n" + responseBody;
                     if (getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
                             addToChatHistory(new ChatMessage(errorReply, ChatMessage.Author.MODEL));
-                        });
-                    }
-                } finally {
-                    if (getActivity() != null) {
-                        getActivity().runOnUiThread(() -> {
                             setLoading(false);
                         });
                     }
                 }
             }
         });
+    }
+
+    private void sendToolFollowUp(String apiKey, String endpoint, String model, JSONArray originalMessages, JSONObject assistantMsg, String toolCallId, String functionName, String toolResultJson) {
+        try {
+            JSONArray followUpMessages = new JSONArray();
+            for (int i = 0; i < originalMessages.length(); i++) {
+                followUpMessages.put(originalMessages.getJSONObject(i));
+            }
+            followUpMessages.put(assistantMsg);
+
+            JSONObject toolMsg = new JSONObject();
+            toolMsg.put("role", "tool");
+            toolMsg.put("tool_call_id", toolCallId);
+            toolMsg.put("name", functionName);
+            toolMsg.put("content", toolResultJson);
+            followUpMessages.put(toolMsg);
+
+            JSONObject followUpBody = new JSONObject();
+            followUpBody.put("model", model);
+            followUpBody.put("temperature", 0.3);
+            followUpBody.put("max_tokens", 4096);
+            followUpBody.put("messages", followUpMessages);
+
+            RequestBody body = RequestBody.create(followUpBody.toString(), JSON);
+            Request request = new Request.Builder()
+                    .url(endpoint)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .post(body)
+                    .build();
+
+            httpClient.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            addToChatHistory(new ChatMessage("Note operation completed, but follow-up response timed out.", ChatMessage.Author.MODEL));
+                            setLoading(false);
+                        });
+                    }
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    try {
+                        if (!response.isSuccessful()) {
+                            final String err = extractErrorMessage(responseBody, response.code());
+                            if (getActivity() != null) {
+                                getActivity().runOnUiThread(() -> {
+                                    addToChatHistory(new ChatMessage(err, ChatMessage.Author.MODEL));
+                                });
+                            }
+                            return;
+                        }
+                        JSONObject json = new JSONObject(responseBody);
+                        JSONArray choices = json.optJSONArray("choices");
+                        if (choices != null && choices.length() > 0) {
+                            JSONObject choice = choices.getJSONObject(0);
+                            JSONObject msg = choice.optJSONObject("message");
+                            if (msg != null) {
+                                handleNormalReply(choice, msg);
+                            }
+                        }
+                    } catch (JSONException e) {
+                        if (getActivity() != null) {
+                            getActivity().runOnUiThread(() -> {
+                                addToChatHistory(new ChatMessage("Note operation completed successfully.", ChatMessage.Author.MODEL));
+                            });
+                        }
+                    } finally {
+                        setLoading(false);
+                    }
+                }
+            });
+        } catch (JSONException e) {
+            setLoading(false);
+        }
     }
 
     private void hideKeyboardAndClearFocus() {

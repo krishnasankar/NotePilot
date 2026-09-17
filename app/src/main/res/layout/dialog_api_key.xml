@@ -7,93 +7,177 @@
     android:elevation="6dp"
     android:padding="20dp">
 
-    <LinearLayout
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
-
-        <TextView
-            android:id="@+id/textTitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:letterSpacing="0.03"
-            android:text="OpenRouter API Key"
-            android:textColor="@android:color/white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/textSubtitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Add or update your API key. It is stored only on this device."
-            android:textColor="#E0FFFFFF"
-            android:textSize="10sp" />
-
-        <EditText
-            android:id="@+id/editApiKey"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:background="@android:color/transparent"
-            android:hint="sk-..."
-            android:inputType="textNoSuggestions|textVisiblePassword"
-            android:padding="6dp"
-            android:singleLine="true"
-            android:textColor="@android:color/white"
-            android:textColorHint="#B3FFFFFF" />
-
-        <TextView
-            android:id="@+id/textPermissionsTitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="15dp"
-            android:letterSpacing="0.03"
-            android:text="Permissions"
-            android:textColor="@android:color/white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <Switch
-            android:id="@+id/editPermissionSwitch"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Allow AI to edit notes"
-            android:textColor="#E0FFFFFF"
-            android:textSize="16sp" />
+        android:scrollbars="none">
 
         <LinearLayout
-            android:id="@+id/buttonRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:gravity="end"
-            android:orientation="horizontal">
+            android:orientation="vertical">
 
-            <Button
-                android:id="@+id/btnCancel"
-                android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/textTitle"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:backgroundTint="@android:color/transparent"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:text="Cancel"
-                android:textAllCaps="false"
-                android:textColor="#E0FFFFFF" />
+                android:letterSpacing="0.03"
+                android:text="Gemini AI Assistant"
+                android:textColor="@android:color/white"
+                android:textSize="20sp"
+                android:textStyle="bold" />
 
-            <Button
-                android:id="@+id/btnSave"
-                android:layout_width="wrap_content"
+            <!-- HELP / GET FREE KEY CARD -->
+            <LinearLayout
+                android:id="@+id/cardHelp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:backgroundTint="#FFFFFF"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:text="Save"
-                android:textAllCaps="false"
-                android:textColor="#333333" />
+                android:layout_marginTop="14dp"
+                android:background="@drawable/bg_card_translucent"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:id="@+id/textHelpDescription"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:lineSpacingExtra="2dp"
+                    android:text="Get a 100% free Gemini API key from Google AI Studio. No credit card required. Free tier includes up to 15 requests/min (1,500/day)."
+                    android:textColor="#E0FFFFFF"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btnGetKey"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:text="Get Free Gemini Key ↗"
+                    android:textColor="@color/colorAccent"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- API KEY INPUT -->
+            <TextView
+                android:id="@+id/textKeyTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:letterSpacing="0.02"
+                android:text="Google Gemini API Key"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/editApiKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_card_translucent"
+                android:hint="AIza... or AQ...."
+                android:inputType="textNoSuggestions|textVisiblePassword"
+                android:padding="10dp"
+                android:singleLine="true"
+                android:textColor="@android:color/white"
+                android:textColorHint="#80FFFFFF"
+                android:textSize="14sp" />
+
+            <!-- MODEL SELECTOR -->
+            <TextView
+                android:id="@+id/textModelTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:letterSpacing="0.02"
+                android:text="Gemini Model"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <Spinner
+                android:id="@+id/spinnerModel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_spinner_field"
+                android:popupBackground="@drawable/bg_spinner_popup"
+                android:dropDownVerticalOffset="4dp"
+                android:overlapAnchor="false"
+                android:minHeight="44dp" />
+
+            <EditText
+                android:id="@+id/editCustomModel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_card_translucent"
+                android:hint="Custom model ID (e.g. gemini-3.5-flash)"
+                android:inputType="textNoSuggestions"
+                android:padding="10dp"
+                android:singleLine="true"
+                android:textColor="@android:color/white"
+                android:textColorHint="#80FFFFFF"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <!-- PERMISSIONS -->
+            <TextView
+                android:id="@+id/textPermissionsTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:letterSpacing="0.02"
+                android:text="Permissions"
+                android:textColor="@android:color/white"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <Switch
+                android:id="@+id/editPermissionSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Allow AI to edit notes automatically"
+                android:textColor="#E0FFFFFF"
+                android:textSize="14sp" />
+
+            <!-- BUTTONS -->
+            <LinearLayout
+                android:id="@+id/buttonRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnCancel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:backgroundTint="@android:color/transparent"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:text="Cancel"
+                    android:textAllCaps="false"
+                    android:textColor="#E0FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnSave"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:backgroundTint="#FFFFFF"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:text="Save"
+                    android:textAllCaps="false"
+                    android:textColor="#333333" />
+            </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
+    </ScrollView>
 
 </RelativeLayout>
